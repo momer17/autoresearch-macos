@@ -32,7 +32,6 @@ pip install -r requirements.txt
 gcloud auth application-default login
 ```
 
-This is how all Claude API calls are authenticated. No API key needed.
 
 ### 3. Set environment variables
 
@@ -43,7 +42,7 @@ cp .env.example .env
 
 ### 4. Verify Claude access
 
-Run this to confirm Vertex AI is working:
+Run to confirm Vertex AI is working:
 
 ```python
 python -c "
@@ -80,7 +79,7 @@ def generate_baseline(config: dict, task_description: str) -> str:
     ...
 ```
 
-### Loop agents (called each iteration)
+### Loop agents 
 
 ```python
 # agents/loop/strategist.py
@@ -147,7 +146,7 @@ def write_model(strategy: str, current_model_code: str) -> str:
 
 ---
 
-## Calling Claude via Vertex (use this pattern everywhere)
+## Calling Claude via Vertex 
 
 ```python
 from anthropic import AnthropicVertex
