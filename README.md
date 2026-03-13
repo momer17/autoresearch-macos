@@ -1,4 +1,4 @@
-# autoresearch
+# autoresearch skeleton repo
 
 Autonomous ML optimisation system. An agent loop that iteratively improves a machine learning model on any CSV dataset, guided by scientific research and a user-defined goal.
 
