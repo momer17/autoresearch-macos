@@ -1,0 +1,16 @@
+.env
+experiments/
+data/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+node_modules/
+frontend/.next/
+frontend/out/

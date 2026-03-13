@@ -1,0 +1,9 @@
+anthropic[vertex]>=0.40.0
+tavily-python>=0.3.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pandas>=2.0.0
+scikit-learn>=1.5.0
+xgboost>=2.0.0
+python-multipart>=0.0.9
+python-dotenv>=1.0.0
