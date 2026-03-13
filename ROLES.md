@@ -12,7 +12,7 @@
 
 ## Omer — Engine
 
-You own the backend and the GPU. Your job is to make the loop run.
+Owns the backend and the GPU. Your job is to make the loop run.
 
 **Morning (before 9am):**
 ```bash
@@ -38,7 +38,7 @@ Share the GPU IP with teammates by 12pm — hard deadline.
 
 ## Person 2 — Agents
 
-You own all the Claude calls. Omer's orchestrator imports your functions directly — match the signatures exactly.
+Owns all the Claude calls.Crchestrator imports your functions directly — match the signatures exactly.
 
 **Setup (before 9am):**
 ```bash
@@ -73,7 +73,7 @@ def write_model(strategy: str, current_model_code: str) -> str:
     """Returns complete new model.py content as string."""
 ```
 
-**Calling Claude (use this pattern):**
+**Calling Claude :**
 ```python
 import anthropic, os
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -99,7 +99,7 @@ result = response.content[0].text.strip()
 
 ## Person 3 — Frontend
 
-You own the UI. It polls `/status` every 3 seconds and displays progress.
+Owns the UI. It polls `/status` every 3 seconds and displays progress.
 
 **Setup (before 9am):**
 ```bash
