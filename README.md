@@ -14,7 +14,7 @@ Autonomous ML optimisation system. An agent loop that iteratively improves a mac
 
 ---
 
-## Setup (do this before 9am)
+## Setup
 
 ### 1. Clone and install
 
@@ -59,7 +59,7 @@ print('OK:', r.content[0].text)
 
 ## Interface contracts
 
-Person 2 must implement these exact function signatures. Orchestrator imports them directly.
+Implementation requirements for agent functions.
 
 ### Setup agents (called once on /start)
 
@@ -96,7 +96,7 @@ def write_model(strategy: str, current_model_code: str) -> str:
 
 ---
 
-## Config shape (derived from CSV + user input, no LLM needed)
+## Config shape
 
 ```json
 {
@@ -110,7 +110,7 @@ def write_model(strategy: str, current_model_code: str) -> str:
 
 ---
 
-## GET /status response shape (Person 3 polls this every 3s)
+## GET /status response shape
 
 ```json
 {
@@ -170,35 +170,33 @@ result = response.content[0].text.strip()
 
 ---
 
-## Running on hackathon day
+## Deployment
 
-### GPU machine (Omer — do this at 9am)
+### GPU machine
 
 ```bash
-# SSH into Vast.ai instance
+# SSH into instance
 # Clone repo, pip install -r requirements.txt
 # Copy .env with real values
 uvicorn backend.api:app --host 0.0.0.0 --port 8080
-# Share the IP with teammates by 12:00 — hard deadline
 ```
 
-### Frontend (Person 3)
+### Frontend
 
 ```bash
 cd frontend
-# Use mock API responses until Omer shares the IP
-# lib/api.ts is the only file that needs the GPU machine IP
+# Update lib/api.ts with the GPU machine IP
 ```
 
 ---
 
-## Demo datasets (download before hackathon)
+## Demo datasets
 
 1. **Fraud detection** — IEEE-CIS or PaySim (Kaggle)
 2. **Customer churn** — Telco Customer Churn (Kaggle)
 3. **Medical** — Pima Indians Diabetes (UCI)
 
-Place small versions (<5MB) in `data/samples/` before committing.
+Place small versions (<5MB) in `data/samples/`.
 
 ---
 
