@@ -1,4 +1,5 @@
 import type { Iteration } from "../lib/api";
+import { calcImprovementPct } from "../lib/api";
 
 interface Props {
   iterations: Iteration[];
@@ -419,11 +420,7 @@ export default function ResultsDashboard({ iterations, baseline, best_score, met
   const kept = iterations.filter((it) => it.kept).length;
   const crashed = iterations.filter((it) => it.score === null).length;
   const successRate = (kept / iterations.length) * 100;
-  const improvement = baseline !== null && best_score !== null ? best_score - baseline : null;
-  const improvementPct =
-    improvement !== null && baseline !== null && baseline !== 0
-      ? (improvement / Math.abs(baseline)) * 100
-      : null;
+  const improvementPct = baseline !== null && best_score !== null ? calcImprovementPct(baseline, best_score, metric) : null;
 
   return (
     <div style={s.wrapper}>

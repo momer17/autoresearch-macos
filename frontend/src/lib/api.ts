@@ -50,6 +50,24 @@ export interface StopResponse {
   message: string;
 }
 
+// --- Metric helpers ---
+
+const LOWER_IS_BETTER = new Set(["rmse", "mae", "mse", "log_loss", "logloss", "error", "mean_squared_error", "mean_absolute_error", "root_mean_squared_error"]);
+
+export function isLowerBetter(metric: string): boolean {
+  return LOWER_IS_BETTER.has(metric.toLowerCase().replace(/ /g, "_"));
+}
+
+/** Returns improvement in the direction that means "better" for the metric. Always >= 0 when there is improvement. */
+export function calcImprovement(baseline: number, best: number, metric: string): number {
+  return isLowerBetter(metric) ? baseline - best : best - baseline;
+}
+
+export function calcImprovementPct(baseline: number, best: number, metric: string): number | null {
+  if (baseline === 0) return null;
+  return (calcImprovement(baseline, best, metric) / Math.abs(baseline)) * 100;
+}
+
 // --- API calls ---
 
 export async function postStart(payload: StartRequest): Promise<StartResponse> {

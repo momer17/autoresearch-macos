@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { getStatus, postStop } from "../lib/api";
+import { getStatus, postStop, calcImprovement } from "../lib/api";
 import type { StatusResponse } from "../lib/api";
 import AgentTimeline, { detectAgentType, extractIteration } from "../components/AgentTimeline";
 import type { TimelineEntry } from "../components/AgentTimeline";
@@ -91,6 +91,7 @@ export default function DashboardPage({ metric }: Props) {
   const [stopError, setStopError] = useState("");
   const [stopPending, setStopPending] = useState(false);
   const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
+  const [dashExpanded, setDashExpanded] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevStageLabelRef = useRef<string>("");
   const timelineIdRef = useRef(0);
@@ -153,7 +154,7 @@ export default function DashboardPage({ metric }: Props) {
   const step = STATUS_STEP[data.status];
   const improvement =
     data.baseline !== null && data.best_score !== null
-      ? data.best_score - data.baseline
+      ? calcImprovement(data.baseline, data.best_score, metric)
       : null;
 
   const reversed = [...data.iterations].reverse();
@@ -316,7 +317,7 @@ export default function DashboardPage({ metric }: Props) {
                         <td style={s.td}>{it.best_score.toFixed(4)}</td>
                         <td style={{ ...s.td, color: it.kept ? "#22c55e" : "#ef4444" }}>
                           {it.score !== null && data.baseline !== null
-                            ? (it.score - data.baseline > 0 ? "+" : "") + (it.score - data.baseline).toFixed(4)
+                            ? (() => { const d = calcImprovement(data.baseline, it.score, metric); return (d > 0 ? "+" : "") + d.toFixed(4); })()
                             : "—"}
                         </td>
                         <td style={{ ...s.td, color: it.kept ? "#22c55e" : "#ef4444" }}>
@@ -339,14 +340,33 @@ export default function DashboardPage({ metric }: Props) {
 
           {/* Right column — results dashboard, sticky so it stays in view while scrolling */}
           {isComplete && data.iterations.length > 0 && (
-            <div style={s.rightCol}>
-              <ResultsDashboard
-                iterations={data.iterations}
-                baseline={data.baseline}
-                best_score={data.best_score}
-                metric={metric}
-              />
-            </div>
+            <>
+              <div style={s.rightCol}>
+                <button style={s.expandBtn} onClick={() => setDashExpanded(true)} title="Expand to full screen">
+                  ⛶ Expand
+                </button>
+                <ResultsDashboard
+                  iterations={data.iterations}
+                  baseline={data.baseline}
+                  best_score={data.best_score}
+                  metric={metric}
+                />
+              </div>
+
+              {dashExpanded && (
+                <div style={s.overlay} onClick={() => setDashExpanded(false)}>
+                  <div style={s.overlayInner} onClick={(e) => e.stopPropagation()}>
+                    <button style={s.closeBtn} onClick={() => setDashExpanded(false)}>✕ Close</button>
+                    <ResultsDashboard
+                      iterations={data.iterations}
+                      baseline={data.baseline}
+                      best_score={data.best_score}
+                      metric={metric}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
         </div>
@@ -679,4 +699,46 @@ const s: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap" as const,
   },
   muted: { color: "#444", fontSize: "0.875rem", margin: 0 },
+  expandBtn: {
+    alignSelf: "flex-end",
+    background: "none",
+    border: "1px solid #2a2a2a",
+    color: "#555",
+    borderRadius: "6px",
+    padding: "0.3rem 0.65rem",
+    fontSize: "0.75rem",
+    cursor: "pointer",
+  },
+  overlay: {
+    position: "fixed" as const,
+    inset: 0,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    zIndex: 1000,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    overflowY: "auto" as const,
+    padding: "2rem 1rem",
+  },
+  overlayInner: {
+    width: "100%",
+    maxWidth: "1100px",
+    backgroundColor: "#0f0f0f",
+    border: "1px solid #2a2a2a",
+    borderRadius: "12px",
+    padding: "1.5rem",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "1rem",
+  },
+  closeBtn: {
+    alignSelf: "flex-end",
+    background: "none",
+    border: "1px solid #2a2a2a",
+    color: "#555",
+    borderRadius: "6px",
+    padding: "0.3rem 0.65rem",
+    fontSize: "0.75rem",
+    cursor: "pointer",
+  },
 };
