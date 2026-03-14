@@ -10,7 +10,7 @@ def generate_program(config: dict, research: str, task_description: str) -> str:
     task_type = config.get("task_type", "binary_classification")
 
     response = client.messages.create(
-        model="claude-haiku-4-5",
+        model="claude-haiku-4-5-20251001",
         max_tokens=1024,
         system=(
             "You are an ML research program manager. "
