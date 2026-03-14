@@ -29,6 +29,22 @@ COMPLETED
 
 ---
 
+Startpage.tsx:
+
+Stage 1 — drop_csv
+Bot says "Drop your CSV". Drop zone shown at the bottom. On drop/browse, frontend reads the CSV headers client-side.
+
+Stage 2 — pick_target
+Bot lists all column names and asks which to predict. Clickable column chips appear so the user doesn't have to type. Text input also works.
+
+Stage 3 — describe_goal
+Bot asks for a one-sentence task description. User types it and hits Enter/Send.
+
+Stage 4 — starting
+inferConfig() auto-determines task_type and metric from keywords in the goal text (e.g. "predict price" → regression/rmse, everything else → binary_classification/f1). postStart() is called with the full payload. On success, navigates to dashboard. On failure, error message in chat and resets to drop zone.
+
+---
+
 TODO — Dashboard (next)
 -----------------------
 [ ] src/pages/DashboardPage.tsx
