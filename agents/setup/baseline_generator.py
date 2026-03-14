@@ -28,7 +28,13 @@ def generate_baseline(config: dict, task_description: str) -> str:
             "You are an expert ML engineer. Write a complete model.py file. "
             "The file must contain exactly one function: build_model(X_train, y_train) "
             "that returns a fitted sklearn or xgboost model. "
-            "Start with a simple but reasonable baseline — no complex pipelines yet. "
+            "Start with a deliberately conservative, interpretable baseline that leaves room "
+            "for future iterations to improve. "
+            "Prefer LogisticRegression, RandomForest, or another simple sklearn baseline "
+            "before any boosted tree model. "
+            "Do not start with XGBoost, CatBoost-style feature engineering, ensembles, or "
+            "aggressive hyperparameter tuning. "
+            "Use straightforward preprocessing only — enough to make the model robust, but not optimized. "
             "Handle preprocessing robustly inline. "
             "Assume Kaggle-style CSVs may contain mixed dtypes, missing values, "
             "categorical string columns, and numeric-looking strings such as 'TotalCharges'. "
@@ -49,7 +55,8 @@ def generate_baseline(config: dict, task_description: str) -> str:
                 f"Metric: {metric}\n"
                 f"Target column: {target_col}\n"
                 f"Feature columns: {feature_cols}\n\n"
-                "Write the baseline model.py."
+                "Write the baseline model.py. "
+                "Make it a true baseline, not a near-final optimized solution."
             )
         }],
     )
