@@ -83,7 +83,7 @@ async def start(
     file: UploadFile = File(...),
     target_col: str = Form(...),
     task_description: str = Form(...),
-    total_iterations: int = Form(8),
+    total_iterations: int = Form(12),
 ):
     if state.get("status") in ("running", "setting_up", "running_baseline"):
         return {"error": "Experiment already running", "status": state["status"]}

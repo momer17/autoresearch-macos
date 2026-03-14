@@ -16,7 +16,7 @@ state = {
     "baseline": None,          # baseline score (float)
     "best_score": None,        # best score seen so far
     "current_iteration": 0,
-    "total_iterations": 8,
+    "total_iterations": 12,
     "research_summary": "",
     "iterations": [],          # list of iteration records
     "error": None,
@@ -43,7 +43,7 @@ def _run(config: dict):
     global state
 
     experiment_id = state["experiment_id"]
-    total = config.get("total_iterations", 8)
+    total = config.get("total_iterations", 12)
     task = config.get("task_description", "Improve model performance")
     metric = config["metric"]
 
