@@ -59,7 +59,7 @@ def run_research(config: dict, task_description: str) -> str:
 
     metric = config.get("metric", "f1")
     task_type = config.get("task_type", "binary_classification")
-    feature_cols = config.get("feature_cols", [])
+    feature_cols = config.get("feature_cols") or []
     feature_preview = ", ".join(feature_cols[:10])
     if len(feature_cols) > 10:
         feature_preview += f" … (+{len(feature_cols) - 10} more)"

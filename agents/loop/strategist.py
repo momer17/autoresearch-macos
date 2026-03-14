@@ -1,7 +1,15 @@
 import anthropic
 import os
+import pathlib
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+PROMPTS_DIR = pathlib.Path(__file__).parent.parent / "prompts"
+
+
+def _load_system_prompt(task_type: str, metric: str) -> str:
+    template = (PROMPTS_DIR / "strategist.txt").read_text()
+    return template.format(task_type=task_type, metric=metric)
 
 
 def get_strategy(model_code: str, program_md: str, research_md: str, history: list, config: dict = None) -> str:
@@ -20,15 +28,7 @@ def get_strategy(model_code: str, program_md: str, research_md: str, history: li
     response = client.messages.create(
         model="claude-opus-4-6",
         max_tokens=512,
-        system=(
-            f"You are an expert ML researcher optimising a {task_type} model on tabular data. "
-            f"The metric is {metric}. "
-            "Suggest ONE specific, concrete change to build_model() in model.py. "
-            "Be precise: name the exact parameter or technique to change and the new value. "
-            "Do not repeat strategies already tried. "
-            "Do not add complex pipelines — make incremental, testable changes. "
-            "Respond with a single short paragraph — no code, just the strategy."
-        ),
+        system=_load_system_prompt(task_type, metric),
         messages=[{
             "role": "user",
             "content": (

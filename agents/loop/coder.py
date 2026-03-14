@@ -1,7 +1,14 @@
 import anthropic
 import os
+import pathlib
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+PROMPTS_DIR = pathlib.Path(__file__).parent.parent / "prompts"
+
+
+def _load_system_prompt() -> str:
+    return (PROMPTS_DIR / "coder.txt").read_text()
 
 
 def write_model(strategy: str, current_model_code: str, config: dict = None) -> str:
@@ -9,13 +16,7 @@ def write_model(strategy: str, current_model_code: str, config: dict = None) -> 
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=4096,
-        system=(
-            "You are an expert Python ML engineer. "
-            "Apply the given strategy to model.py — make ONLY the described change, nothing else. "
-            "The file must contain exactly one function: build_model(X_train, y_train) returning a fitted model. "
-            "Do not import anything outside sklearn, xgboost, numpy, pandas. "
-            "Return ONLY the complete raw Python file — no markdown, no code fences."
-        ),
+        system=_load_system_prompt(),
         messages=[{
             "role": "user",
             "content": (

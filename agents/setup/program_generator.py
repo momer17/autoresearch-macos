@@ -1,7 +1,14 @@
 import anthropic
 import os
+import pathlib
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+PROMPTS_DIR = pathlib.Path(__file__).parent.parent / "prompts"
+
+
+def _load_system_prompt() -> str:
+    return (PROMPTS_DIR / "program.txt").read_text()
 
 
 def generate_program(config: dict, research: str, task_description: str) -> str:
@@ -12,12 +19,7 @@ def generate_program(config: dict, research: str, task_description: str) -> str:
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,
-        system=(
-            "You are an ML research program manager. "
-            "Write a concise program.md that lists experiments to run in priority order. "
-            "Each experiment must be a single concrete change to build_model() in model.py. "
-            "Focus on high-impact changes first."
-        ),
+        system=_load_system_prompt(),
         messages=[{
             "role": "user",
             "content": (
@@ -25,7 +27,7 @@ def generate_program(config: dict, research: str, task_description: str) -> str:
                 f"Task type: {task_type}\n"
                 f"Metric: {metric}\n\n"
                 f"Research findings:\n{research}\n\n"
-                "Write program.md with the top 8 experiments to try."
+                "Write the experiment plan with the top 8 experiments to try."
             )
         }],
     )

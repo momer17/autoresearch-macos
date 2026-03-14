@@ -1,7 +1,14 @@
 import anthropic
 import os
+import pathlib
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+PROMPTS_DIR = pathlib.Path(__file__).parent.parent / "prompts"
+
+
+def _load_system_prompt() -> str:
+    return (PROMPTS_DIR / "baseline.txt").read_text()
 
 
 def generate_baseline(config: dict, task_description: str) -> str:
@@ -14,15 +21,7 @@ def generate_baseline(config: dict, task_description: str) -> str:
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=2048,
-        system=(
-            "You are an expert ML engineer. Write a complete model.py file. "
-            "The file must contain exactly one function: build_model(X_train, y_train) "
-            "that returns a fitted sklearn or xgboost model. "
-            "Start with a simple but reasonable baseline — no complex pipelines yet. "
-            "Handle any obvious preprocessing inline (e.g. fillna, label encoding if needed). "
-            "Do not import anything outside of sklearn, xgboost, numpy, pandas. "
-            "Return ONLY the raw Python file — no markdown, no code fences."
-        ),
+        system=_load_system_prompt(),
         messages=[{
             "role": "user",
             "content": (
