@@ -1,16 +1,49 @@
 import anthropic
 import os
+import pathlib
+
+import pandas as pd
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+PROMPTS_DIR = pathlib.Path(__file__).parent.parent / "prompts"
+REPO_ROOT = pathlib.Path(__file__).parent.parent.parent
+PROGRAM_MD = REPO_ROOT / "program.md"
+
+
+def _load_system_prompt() -> str:
+    return (PROMPTS_DIR / "program.txt").read_text()
+
+
+def _dataset_shape(config: dict) -> tuple[int, int] | None:
+    csv_path = config.get("csv_path")
+    if not csv_path:
+        return None
+    try:
+        df = pd.read_csv(csv_path, nrows=0)
+        n_cols = len(df.columns)
+        n_rows = sum(1 for _ in open(csv_path)) - 1  # fast row count
+        return n_rows, n_cols
+    except Exception:
+        return None
 
 
 def generate_program(config: dict, research: str, task_description: str) -> str:
     """Returns program.md content as string — the research plan for the agent loop."""
     metric = config.get("metric", "f1")
     task_type = config.get("task_type", "binary_classification")
+    target_col = config.get("target_col", "")
+    feature_cols = config.get("feature_cols") or []
+
+    feature_preview = ", ".join(feature_cols[:15])
+    if len(feature_cols) > 15:
+        feature_preview += f" … (+{len(feature_cols) - 15} more)"
+
+    shape = _dataset_shape(config)
+    shape_line = f"Dataset size: {shape[0]} rows, {shape[1]} columns\n" if shape else ""
 
     response = client.messages.create(
-        model="claude-haiku-4-5",
+        model="claude-haiku-4-5-20251001",
         max_tokens=1024,
         system=(
             "You are an ML research program manager. "
@@ -25,10 +58,16 @@ def generate_program(config: dict, research: str, task_description: str) -> str:
             "content": (
                 f"Task: {task_description}\n"
                 f"Task type: {task_type}\n"
-                f"Metric: {metric}\n\n"
+                f"Target column: {target_col}\n"
+                f"Features: {feature_preview or 'all columns except target'}\n"
+                f"{shape_line}"
+                f"Metric to optimise: {metric}\n\n"
                 f"Research findings:\n{research}\n\n"
-                "Write program.md with the top 8 experiments to try."
+                "Write the experiment plan with the top 8 experiments to try."
             )
         }],
     )
-    return response.content[0].text.strip()
+
+    program = response.content[0].text.strip()
+    PROGRAM_MD.write_text(program)
+    return program

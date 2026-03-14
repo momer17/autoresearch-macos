@@ -2,11 +2,14 @@ import shutil
 import uuid
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.orchestrator import start_experiment, get_status, state
+from backend.orchestrator import start_experiment, get_status, state, stop_experiment
 
 REPO_ROOT = Path(__file__).parent.parent
 UPLOADS_DIR = REPO_ROOT / "data" / "uploads"
@@ -125,3 +128,8 @@ async def start(
 @app.get("/status")
 def status():
     return get_status()
+
+
+@app.post("/stop")
+def stop():
+    return stop_experiment()
