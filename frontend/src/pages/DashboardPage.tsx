@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { getStatus, postStop } from "../lib/api";
 import type { StatusResponse } from "../lib/api";
 import AgentTimeline, { detectAgentType, extractIteration } from "../components/AgentTimeline";
@@ -75,7 +76,11 @@ function TextBlock({ text, label }: { text: string; label: string }) {
         <span>{label}</span>
         <span style={cs.chevron}>{open ? "▲" : "▼"}</span>
       </button>
-      {open && <p style={cs.prose}>{text}</p>}
+      {open && (
+        <div style={cs.prose} className="prose">
+          <ReactMarkdown>{text}</ReactMarkdown>
+        </div>
+      )}
     </div>
   );
 }
@@ -154,10 +159,11 @@ export default function DashboardPage({ metric }: Props) {
   const reversed = [...data.iterations].reverse();
   const showProgress = data.status === "running" || data.status === "complete" || data.status === "stopped";
   const canStop = data.status === "setting_up" || data.status === "running_baseline" || data.status === "running";
+  const isComplete = data.status === "complete" || data.status === "stopped";
 
   return (
     <div style={s.page}>
-      <div style={s.inner}>
+      <div style={isComplete ? s.innerWide : s.inner}>
 
         {/* ── Header ── */}
         <div style={s.headerRow}>
@@ -263,83 +269,87 @@ export default function DashboardPage({ metric }: Props) {
           </div>
         )}
 
-        {/* ── Agent timeline ── */}
-        <AgentTimeline
-          entries={timelineEntries}
-          isLive={!DONE.has(data.status)}
-        />
+        {/* ── Two-column layout: left = live feed + table, right = summary dashboard ── */}
+        <div style={isComplete ? s.twoCol : s.singleCol}>
 
-        {/* ── Agent outputs ── */}
-        <div style={s.outputsSection}>
-          <TextBlock label="🔍 Research findings" text={data.research_summary} />
-          <TextBlock label="📋 Experiment plan"   text={data.program} />
-          <CodeBlock label="🏗️ Baseline model"    code={data.baseline_code} />
-          {data.current_strategy && (
-            <TextBlock label={`⚡ Current strategy (iter ${data.current_iteration})`} text={data.current_strategy} />
-          )}
-          {data.current_code && (
-            <CodeBlock label={`⚡ Generated code (iter ${data.current_iteration})`} code={data.current_code} />
-          )}
-        </div>
+          {/* Left column */}
+          <div style={s.leftCol}>
+            <AgentTimeline
+              entries={timelineEntries}
+              isLive={!DONE.has(data.status)}
+            />
 
-        {/* ── Results dashboard ── */}
-        {(data.status === "complete" || data.status === "stopped") && data.iterations.length > 0 && (
-          <ResultsDashboard
-            iterations={data.iterations}
-            baseline={data.baseline}
-            best_score={data.best_score}
-            metric={metric}
-          />
-        )}
+            <div style={s.outputsSection}>
+              <TextBlock label="🔍 Research findings" text={data.research_summary} />
+              <TextBlock label="📋 Experiment plan"   text={data.program} />
+              <CodeBlock label="🏗️ Baseline model"    code={data.baseline_code} />
+              {data.current_strategy && (
+                <TextBlock label={`⚡ Current strategy (iter ${data.current_iteration})`} text={data.current_strategy} />
+              )}
+              {data.current_code && (
+                <CodeBlock label={`⚡ Generated code (iter ${data.current_iteration})`} code={data.current_code} />
+              )}
+            </div>
 
-        {/* ── Error ── */}
-        {(data.status === "error" || data.status === "stopped") && data.error && (
-          <pre style={s.errorBox}>{data.error}</pre>
-        )}
+            {(data.status === "error" || data.status === "stopped") && data.error && (
+              <pre style={s.errorBox}>{data.error}</pre>
+            )}
 
-        {/* ── Iteration table ── */}
-        {data.iterations.length > 0 && (
-          <div style={s.tableWrap}>
-            <div style={s.tableTitle}>Iteration history</div>
-            <table style={s.table}>
-              <thead>
-                <tr>
-                  {["#", "Score", "Best", "Δ", "Kept", "Strategy"].map((h) => (
-                    <th key={h} style={s.th}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {reversed.map((it) => {
-                  return (
-                    <tr key={it.iteration} style={s.tr}>
-                      <td style={s.td}>{it.iteration}</td>
-                      <td style={s.td}>
-                        {it.score !== null ? it.score.toFixed(4) : <span style={s.muted}>crash</span>}
-                      </td>
-                      <td style={s.td}>{it.best_score.toFixed(4)}</td>
-                      <td style={{ ...s.td, color: it.kept ? "#22c55e" : "#ef4444" }}>
-                        {it.score !== null && data.baseline !== null
-                          ? (it.score - data.baseline > 0 ? "+" : "") + (it.score - data.baseline).toFixed(4)
-                          : "—"}
-                      </td>
-                      <td style={{ ...s.td, color: it.kept ? "#22c55e" : "#ef4444" }}>
-                        {it.kept ? "✓" : "✗"}
-                      </td>
-                      <td style={s.tdStrategy} title={it.strategy}>
-                        {it.strategy.length > 90 ? it.strategy.slice(0, 90) + "…" : it.strategy}
-                      </td>
+            {data.iterations.length > 0 && (
+              <div style={s.tableWrap}>
+                <div style={s.tableTitle}>Iteration history</div>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      {["#", "Score", "Best", "Δ", "Kept", "Strategy"].map((h) => (
+                        <th key={h} style={s.th}>{h}</th>
+                      ))}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  </thead>
+                  <tbody>
+                    {reversed.map((it) => (
+                      <tr key={it.iteration} style={s.tr}>
+                        <td style={s.td}>{it.iteration}</td>
+                        <td style={s.td}>
+                          {it.score !== null ? it.score.toFixed(4) : <span style={s.muted}>crash</span>}
+                        </td>
+                        <td style={s.td}>{it.best_score.toFixed(4)}</td>
+                        <td style={{ ...s.td, color: it.kept ? "#22c55e" : "#ef4444" }}>
+                          {it.score !== null && data.baseline !== null
+                            ? (it.score - data.baseline > 0 ? "+" : "") + (it.score - data.baseline).toFixed(4)
+                            : "—"}
+                        </td>
+                        <td style={{ ...s.td, color: it.kept ? "#22c55e" : "#ef4444" }}>
+                          {it.kept ? "✓" : "✗"}
+                        </td>
+                        <td style={s.tdStrategy} title={it.strategy}>
+                          {it.strategy.length > 90 ? it.strategy.slice(0, 90) + "…" : it.strategy}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-        {data.iterations.length === 0 && data.status !== "error" && data.status !== "idle" && (
-          <p style={s.muted}>Waiting for first iteration…</p>
-        )}
+            {data.iterations.length === 0 && data.status !== "error" && data.status !== "idle" && (
+              <p style={s.muted}>Waiting for first iteration…</p>
+            )}
+          </div>
+
+          {/* Right column — results dashboard, sticky so it stays in view while scrolling */}
+          {isComplete && data.iterations.length > 0 && (
+            <div style={s.rightCol}>
+              <ResultsDashboard
+                iterations={data.iterations}
+                baseline={data.baseline}
+                best_score={data.best_score}
+                metric={metric}
+              />
+            </div>
+          )}
+
+        </div>
 
       </div>
     </div>
@@ -386,7 +396,6 @@ const cs: Record<string, React.CSSProperties> = {
     color: "#aaa",
     fontSize: "0.85rem",
     lineHeight: "1.7",
-    whiteSpace: "pre-wrap",
   },
 };
 
@@ -403,6 +412,39 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "1.5rem",
+  },
+  innerWide: {
+    maxWidth: "1400px",
+    margin: "0 auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.5rem",
+  },
+  singleCol: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.5rem",
+  },
+  twoCol: {
+    display: "flex",
+    gap: "1.5rem",
+    alignItems: "flex-start",
+  },
+  leftCol: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.5rem",
+  },
+  rightCol: {
+    width: "480px",
+    flexShrink: 0,
+    position: "sticky" as const,
+    top: "2rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "1rem",
   },
   headerRow: {
     display: "flex",
