@@ -45,7 +45,18 @@ def generate_program(config: dict, research: str, task_description: str) -> str:
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,
+<<<<<<< HEAD
         system=_load_system_prompt(),
+=======
+        system=(
+            "You are an ML research program manager. "
+            "Write a concise program.md that lists experiments to run in priority order. "
+            "Each experiment must be a single concrete change to build_model() in model.py. "
+            "Only propose experiments that can be implemented with sklearn and xgboost. "
+            "Do not include LightGBM, CatBoost, or any unsupported library. "
+            "Focus on high-impact changes first."
+        ),
+>>>>>>> origin/master
         messages=[{
             "role": "user",
             "content": (
