@@ -24,7 +24,12 @@ const STATUS_COLOR: Record<StatusResponse["status"], string> = {
 
 const DONE = new Set(["complete", "error"]);
 
-export default function DashboardPage() {
+interface Props {
+  metric: string;
+  taskType: string;
+}
+
+export default function DashboardPage({ metric }: Props) {
   const [data, setData] = useState<StatusResponse | null>(null);
   const [connError, setConnError] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -72,9 +77,12 @@ export default function DashboardPage() {
         {/* Header row */}
         <div style={s.headerRow}>
           <h1 style={s.title}>autoresearch</h1>
-          <span style={{ ...s.badge, color: STATUS_COLOR[data.status] }}>
-            {STATUS_LABEL[data.status]}
-          </span>
+          <div style={s.headerRight}>
+            <span style={s.metricLabel}>Optimising for: <strong>{metric}</strong></span>
+            <span style={{ ...s.badge, color: STATUS_COLOR[data.status] }}>
+              {STATUS_LABEL[data.status]}
+            </span>
+          </div>
         </div>
 
         {connError && <p style={s.connError}>Connection error — retrying...</p>}
@@ -201,6 +209,15 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: "1.25rem",
     fontWeight: 700,
     color: "#fff",
+  },
+  headerRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1rem",
+  },
+  metricLabel: {
+    fontSize: "0.8rem",
+    color: "#555",
   },
   badge: {
     fontSize: "0.85rem",

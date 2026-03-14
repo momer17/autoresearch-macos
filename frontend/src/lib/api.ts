@@ -27,22 +27,23 @@ export interface StartRequest {
   file: File;
   target_col: string;
   task_description: string;
-  metric: string;
-  task_type: string;
-  feature_cols?: string;
   total_iterations?: number;
+}
+
+export interface StartResponse {
+  experiment_id: string;
+  status: string;
+  task_type: string;
+  metric: string;
 }
 
 // --- API calls ---
 
-export async function postStart(payload: StartRequest): Promise<void> {
+export async function postStart(payload: StartRequest): Promise<StartResponse> {
   const form = new FormData();
   form.append("file", payload.file);
   form.append("target_col", payload.target_col);
   form.append("task_description", payload.task_description);
-  form.append("metric", payload.metric);
-  form.append("task_type", payload.task_type);
-  if (payload.feature_cols) form.append("feature_cols", payload.feature_cols);
   if (payload.total_iterations !== undefined)
     form.append("total_iterations", String(payload.total_iterations));
 
@@ -54,6 +55,7 @@ export async function postStart(payload: StartRequest): Promise<void> {
     const text = await res.text();
     throw new Error(`Failed to start: ${res.status} ${text}`);
   }
+  return res.json();
 }
 
 export async function getStatus(): Promise<StatusResponse> {

@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import { postStart } from "../lib/api";
+import type { ExperimentMeta } from "../App";
 
 interface Props {
-  onStarted: () => void;
+  onStarted: (meta: ExperimentMeta) => void;
 }
 
 interface Message {
@@ -11,16 +12,6 @@ interface Message {
 }
 
 type Stage = "drop_csv" | "pick_target" | "describe_goal" | "starting";
-
-function inferConfig(goal: string, columns: string[], target: string) {
-  const isRegression =
-    /predict.*(price|cost|value|amount|revenue|sales|score|age|weight|temperature|rate)/i.test(goal) ||
-    /regression|continuous|numeric/i.test(goal);
-  const task_type = isRegression ? "regression" : "binary_classification";
-  const metric = isRegression ? "rmse" : "f1";
-  const feature_cols = columns.filter((c) => c !== target).join(", ");
-  return { task_type, metric, feature_cols };
-}
 
 function parseColumns(csvText: string): string[] {
   const firstLine = csvText.split("\n")[0];
@@ -102,18 +93,14 @@ export default function StartPage({ onStarted }: Props) {
     if (!csvFile) return;
     setStage("starting");
     push("bot", "Starting the experiment...");
-    const { task_type, metric, feature_cols } = inferConfig(goal, columns, target);
     try {
-      await postStart({
+      const res = await postStart({
         file: csvFile,
         target_col: target,
         task_description: goal,
-        metric,
-        task_type,
-        feature_cols,
         total_iterations: 8,
       });
-      onStarted();
+      onStarted({ metric: res.metric, task_type: res.task_type });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       push("bot", "Failed to start: " + msg + "\n\nDrop your CSV again to retry.");

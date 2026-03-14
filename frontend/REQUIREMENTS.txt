@@ -9,104 +9,48 @@ COMPLETED
 ---------
 [x] src/lib/api.ts
       - Full TypeScript types matching real backend contracts
-      - postStart() sends multipart/form-data (file upload + form fields)
+      - postStart() sends multipart/form-data, returns StartResponse { experiment_id, status, task_type, metric }
       - getStatus() polls GET /status
-      - API_BASE_URL constant — swap GPU IP here only
-
-[x] src/pages/StartPage.tsx
-      - File upload input (CSV)
-<<<<<<< Updated upstream
-      - target_col, task_description, metric, task_type, feature_cols, total_iterations
-=======
-      - target_col, task_description, total_iterations
->>>>>>> Stashed changes
-      - Sends FormData to POST /start
-      - Loading + error states, disabled button styling
+      - API_BASE_URL = "/api" — proxied by Vite to localhost:8080
 
 [x] src/App.tsx
-      - Simple page state: "start" | "dashboard"
+      - Holds ExperimentMeta { metric, task_type } in state
+      - Passes meta from /start response into DashboardPage
       - No router needed for 2 pages
+
+[x] src/pages/StartPage.tsx
+      - Full-screen chat interface (dark mode)
+      - Stage machine: drop_csv → pick_target → describe_goal → starting
+      - Drag-and-drop CSV upload, reads column headers client-side
+      - Column chips for picking target
+      - Sends only: file, target_col, task_description, total_iterations
+      - Backend auto-infers metric, task_type, feature_cols
+      - On success: passes { metric, task_type } from /start response up to App
+
+[x] src/pages/DashboardPage.tsx
+      - Polls GET /status every 3 seconds, stops on complete/error
+      - Shows connection error inline without stopping poll
+      - Header: title + "Optimising for: {metric}" + status badge
+      - Score panel: Baseline / Best / Improvement (colour-coded)
+      - Progress bar (running/complete phases only)
+      - Research summary (collapsible)
+      - Error box (full trace on error status)
+      - Iteration table: newest first, null score shown as "crash", kept ✓/✗
 
 [x] src/style.css
       - Minimal reset only (body margin, box-sizing, font, background)
-      - All template CSS removed
+
+[x] vite.config.ts
+      - Proxy: /api → http://localhost:8080 (swap target for GPU IP)
 
 ---
 
-Startpage.tsx:
-
-Stage 1 — drop_csv
-Bot says "Drop your CSV". Drop zone shown at the bottom. On drop/browse, frontend reads the CSV headers client-side.
-
-Stage 2 — pick_target
-Bot lists all column names and asks which to predict. Clickable column chips appear so the user doesn't have to type. Text input also works.
-
-Stage 3 — describe_goal
-Bot asks for a one-sentence task description. User types it and hits Enter/Send.
-
-Stage 4 — starting
-inferConfig() auto-determines task_type and metric from keywords in the goal text (e.g. "predict price" → regression/rmse, everything else → binary_classification/f1). postStart() is called with the full payload. On success, navigates to dashboard. On failure, error message in chat and resets to drop zone.
-
----
-
-TODO — Dashboard (next)
------------------------
-[ ] src/pages/DashboardPage.tsx
-      On mount: poll getStatus() every 3 seconds via setInterval
-      On unmount: clear interval
-      Stop polling when status === "complete" or "error"
-      Show loading state before first response arrives
-      Show connection error inline if fetch throws (keep polling)
-
-[ ] Status badge
-      idle / setting_up / running_baseline / running → show as "Running..."
-      complete → green
-      error → red, show state.error message
-
-[ ] Score panel
-      Baseline score vs best score so far
-      Improvement delta (formatted to 4 decimal places)
-      Note: metric direction varies — higher is better for f1/accuracy/roc_auc/r2,
-            lower is better for rmse/mae. Display accordingly.
-<<<<<<< Updated upstream
-=======
-      Show the metric name (e.g. "Optimising for: roc_auc") — store from /start response
->>>>>>> Stashed changes
-
-[ ] Progress bar
-      current_iteration / total_iterations
-      Label: "Iteration 3 / 8"
-      Hide during setting_up and running_baseline phases
-
-[ ] Research summary
-      Show research_summary text
-      During setup phases show the live status string (e.g. "Running research...")
-      Collapsible once experiment is running
-
-[ ] Iteration table
-      Columns: # | Score | Best | Strategy | Kept | Error
-      Most recent at TOP
-      Score: show "—" if null (crashed run)
-      Kept: ✓ green / ✗ red
-      Strategy: truncate with full text on hover (title attribute)
-      Error: show short error if present
-      Scrollable (max-height + overflow-y: auto)
-
----
-
-API CONTRACTS (as built)
-------------------------
+API CONTRACTS
+-------------
 POST /start — multipart/form-data
   file             File      required — CSV upload
   target_col       string    required
   task_description string    required
-<<<<<<< Updated upstream
-  metric           string    required  (f1 | accuracy | roc_auc | rmse | mae | r2)
-  task_type        string    required  (binary_classification | multiclass_classification | regression)
-  feature_cols     string    optional  comma-separated, empty = all except target
-  total_iterations number    optional  default 8
-
-=======
   total_iterations number    optional  default 8
 
   *** DO NOT send metric, task_type, or feature_cols — backend auto-infers all three ***
@@ -115,10 +59,10 @@ POST /start — response JSON
   experiment_id    string
   status           "started"
   task_type        string    (binary_classification | multiclass_classification | regression)
-  metric           string    (roc_auc | f1_macro | rmse | ...)
-  *** Store task_type and metric from this response on the client — they are NOT in /status ***
+  metric           string    (roc_auc | f1 | f1_macro | rmse | ...)
 
->>>>>>> Stashed changes
+  *** Store task_type and metric from this response — they are NOT in /status ***
+
 GET /status — JSON
   status           "idle" | "setting_up" | "running_baseline" | "running" | "complete" | "error"
   experiment_id    string | null
@@ -132,10 +76,6 @@ GET /status — JSON
 
 Iteration {
   iteration   number
-<<<<<<< Updated upstream
-=======
-  iteration   number
->>>>>>> Stashed changes
   score       number | null   (null = crashed run)
   best_score  number
   strategy    string
@@ -149,26 +89,22 @@ FILE STRUCTURE
 --------------
 src/
   lib/
-    api.ts              ← DONE
+    api.ts              DONE
   pages/
-    StartPage.tsx       ← DONE
-    DashboardPage.tsx   ← stub, needs full implementation
-  components/           ← create as needed during dashboard work
-  App.tsx               ← DONE
-  main.tsx              ← DONE
-  style.css             ← DONE (minimal reset)
+    StartPage.tsx       DONE
+    DashboardPage.tsx   DONE
+  App.tsx               DONE
+  main.tsx              DONE
+  style.css             DONE
 
 ---
 
 KEY RULES
 ---------
-1. API_BASE_URL in api.ts is the only place to set the GPU IP.
+1. API proxy target in vite.config.ts is the only place to set the GPU IP.
 2. No mock data — backend is live.
 3. Poll every 3 seconds. Stop on "complete" or "error".
-4. Metric direction: higher is better for f1/accuracy/roc_auc/r2 — lower for rmse/mae.
-5. score in iterations can be null — always null-check before displaying.
-6. No UI libraries needed.
-<<<<<<< Updated upstream
-=======
-7. metric and task_type come from the /start response, NOT from /status — store them in component state.
->>>>>>> Stashed changes
+4. metric and task_type come from the /start response, NOT from /status — stored in App state.
+5. Metric direction: higher is better for f1/accuracy/roc_auc/r2 — lower for rmse/mae.
+6. score in iterations can be null — always null-check before displaying.
+7. No UI libraries needed.

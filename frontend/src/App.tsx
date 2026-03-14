@@ -2,15 +2,22 @@ import { useState } from "react";
 import StartPage from "./pages/StartPage";
 import DashboardPage from "./pages/DashboardPage";
 
-export type Page = "start" | "dashboard";
+export interface ExperimentMeta {
+  metric: string;
+  task_type: string;
+}
 
 export default function App() {
-  const [page, setPage] = useState<Page>("start");
+  const [meta, setMeta] = useState<ExperimentMeta | null>(null);
 
   return (
     <>
-      {page === "start" && <StartPage onStarted={() => setPage("dashboard")} />}
-      {page === "dashboard" && <DashboardPage />}
+      {meta === null && (
+        <StartPage onStarted={(m) => setMeta(m)} />
+      )}
+      {meta !== null && (
+        <DashboardPage metric={meta.metric} taskType={meta.task_type} />
+      )}
     </>
   );
 }
