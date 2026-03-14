@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.orchestrator import start_experiment, get_status, state
@@ -32,6 +32,47 @@ def _infer_task_and_metric(y) -> tuple[str, str]:
         return "regression", "rmse"
 
 
+def _sanitize_uploaded_dataframe(df: pd.DataFrame, target_col: str) -> pd.DataFrame:
+    """Normalize common Kaggle CSV issues before the locked evaluator reads the file."""
+    if target_col not in df.columns:
+        raise HTTPException(status_code=400, detail=f"Target column '{target_col}' not found in CSV")
+
+    df = df.copy()
+
+    # Trim whitespace and turn empty strings into nulls so numeric coercion works.
+    object_cols = df.select_dtypes(include=["object", "string"]).columns
+    for col in object_cols:
+        df[col] = df[col].astype("string").str.strip()
+        df[col] = df[col].replace("", pd.NA)
+
+    # Convert object columns that are actually numeric values stored as strings.
+    for col in list(object_cols):
+        series = df[col]
+        non_null = series.dropna()
+        if non_null.empty:
+            continue
+
+        converted = pd.to_numeric(series, errors="coerce")
+        if converted.dropna().shape[0] == non_null.shape[0]:
+            df[col] = converted
+
+    target = df[target_col]
+    if target.isna().any():
+        raise HTTPException(status_code=400, detail=f"Target column '{target_col}' contains missing values")
+    if target.nunique() < 2:
+        raise HTTPException(status_code=400, detail=f"Target column '{target_col}' must contain at least 2 classes/values")
+
+    task_type, _ = _infer_task_and_metric(target)
+
+    # XGBoost and some sklearn flows break on string labels; encode classification targets once here.
+    if task_type != "regression" and not pd.api.types.is_numeric_dtype(target):
+        labels = sorted(target.astype(str).unique().tolist())
+        mapping = {label: idx for idx, label in enumerate(labels)}
+        df[target_col] = target.astype(str).map(mapping).astype(int)
+
+    return df
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -56,6 +97,8 @@ async def start(
 
     # Infer task type and metric from the data
     df = pd.read_csv(csv_path)
+    df = _sanitize_uploaded_dataframe(df, target_col)
+    df.to_csv(csv_path, index=False)
     feature_cols = [c for c in df.columns if c != target_col]
     task_type, metric = _infer_task_and_metric(df[target_col])
 
