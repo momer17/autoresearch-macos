@@ -2,6 +2,9 @@ import shutil
 import uuid
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware

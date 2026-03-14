@@ -1,47 +1,79 @@
-# Experiment Plan: Customer Churn Prediction (F1 Optimization)
+# program.md
 
-1. **XGBoost with scale_pos_weight and stratified CV**
-   - Implement XGBoost classifier with `scale_pos_weight=6` (inverse class ratio for ~14% churn), `max_depth=5`, `learning_rate=0.05`, `subsample=0.8`, `colsample_bytree=0.8`
-   - Use StratifiedKFold (5 folds) with F1 scoring
-   - Tune decision threshold on validation fold to maximize F1 (test range 0.3–0.5)
-   - Expected impact: Establish strong baseline; addresses class imbalance directly
+## Multiclass Classification Experiment Plan
+**Task:** TechSupport prediction | **Metric:** f1_macro | **Budget:** 8 experiments
 
-2. **LightGBM with is_unbalance flag and native categorical handling**
-   - Implement LightGBM with `is_unbalance=True`, `num_leaves=30`, `min_child_samples=20`, `learning_rate=0.05`
-   - Pass categorical features directly (no one-hot encoding) using `categorical_feature` parameter
-   - Use StratifiedKFold (5 folds) with F1 scoring
-   - Tune decision threshold on validation fold (test range 0.3–0.5)
-   - Expected impact: Faster training than XGBoost; cleaner categorical handling reduces preprocessing
+---
 
-3. **Feature engineering: tenure polynomial and tenure bins**
-   - Add `tenure_squared = tenure^2` and `tenure_cubed = tenure^3` to feature set
-   - Create tenure bins: `tenure_0_6m`, `tenure_6_12m`, `tenure_12_24m`, `tenure_24plus` (dummy variables)
-   - Retrain XGBoost (Experiment 1 settings) with expanded features
-   - Expected impact: Capture non-linear churn decay patterns; tenure is the strongest churn predictor
+### Experiment 1: Baseline XGBoost with Target Encoding
+**Priority:** CRITICAL  
+**Change:** Implement ordinal encoding for categorical features + XGBoost with stratified 5-fold CV optimized for f1_macro.
+```python
+# In build_model():
+# - Remove customerID
+# - Target-encode all categorical features
+# - XGBClassifier(objective='multi:softprob', eval_metric='mlogloss', max_depth=6, learning_rate=0.1)
+# - Evaluate f1_macro on validation fold
+```
+**Rationale:** Establishes baseline performance with sklearn-compatible approach. Target encoding handles categorical data better than one-hot for this dataset size.
 
-4. **Service bundle interaction features**
-   - Create `num_services = OnlineSecurity + OnlineBackup + DeviceProtection + TechSupport + StreamingTV + StreamingMovies` (count of active services)
-   - Create interaction: `tenure × num_services`
-   - Create high_risk_profile flag: `(num_services == 0) & (Contract == 'Month-to-month')`
-   - Retrain XGBoost (Experiment 1 settings) with new features
-   - Expected impact: Identify retention through service adoption; contract + service interaction is strong churn signal
+---
 
-5. **SMOTE oversampling + XGBoost without scale_pos_weight**
-   - Apply SMOTE (k_neighbors=5) to training fold only (fit on train, transform train, apply to test within CV)
-   - Train XGBoost without `scale_pos_weight` (set to 1), `max_depth=5`, `learning_rate=0.05`
-   - Use StratifiedKFold (5 folds) with F1 scoring
-   - Tune decision threshold on validation fold (test range 0.3–0.5)
-   - Expected impact: Compare synthetic oversampling vs. cost-weighting; validate class balance approach
+### Experiment 2: Tenure Binning + Service Count Features
+**Priority:** HIGH  
+**Change:** Add engineered features: tenure quartiles, total service adoption count, tenure � SeniorCitizen interaction.
+```python
+# In build_model():
+# - pd.qcut(tenure, q=4, labels=['0-3m', '3-12m', '1-2y', '2y+'])
+# - service_count = sum([OnlineSecurity=='Yes', OnlineBackup=='Yes', ...])
+# - Add interaction: tenure_bin � SeniorCitizen (ordinal encoded)
+```
+**Rationale:** Research shows tenure is critical; binning captures non-linear churn patterns. Service adoption is a key risk indicator.
 
-6. **XGBoost hyperparameter grid search focused on F1**
-   - Grid search: `max_depth` ∈ {3, 5, 7}, `learning_rate` ∈ {0.01, 0.05, 0.1}, `scale_pos_weight` ∈ {5, 6, 7}
-   - Use StratifiedKFold (5 folds) with F1 scoring (not accuracy)
-   - Set `reg_lambda=1.0`, `reg_alpha=0.5` to prevent overfitting
-   - Optimize threshold post-grid-search
-   - Expected impact: Data-driven hyperparameter selection; prevents suboptimal defaults
+---
 
-7. **Stacked ensemble: XGBoost + LightGBM meta-learner**
-   - Train XGBoost (Experiment 1) and LightGBM (Experiment 2) on 80% of data
-   - Generate probability predictions from both models on held-out 20%
-   - Train Logistic Regression (L2 regularization, C=1.0) on stacked predictions
-   - Use final meta-learner for test predictions and
+### Experiment 3: Class Weight Balancing in XGBoost
+**Priority:** HIGH  
+**Change:** Add `scale_pos_weight` adjustment and `class_weight='balanced'` equivalent via sample weights in XGBoost.
+```python
+# In build_model():
+# - Compute class frequencies in training set
+# - Pass scale_pos_weight or use sample_weight parameter scaled inversely to class counts
+# - XGBClassifier(..., scale_pos_weight=[w1, w2, w3])
+```
+**Rationale:** F1-macro requires balanced performance across minority classes. Weighted loss prevents majority class collapse.
+
+---
+
+### Experiment 4: Sklearn Gradient Boosting (GradientBoostingClassifier)
+**Priority:** MEDIUM  
+**Change:** Replace XGBoost with sklearn's GradientBoostingClassifier; tune max_depth, learning_rate, n_estimators.
+```python
+# In build_model():
+# - GradientBoostingClassifier(loss='log_loss', max_depth=5, learning_rate=0.05, n_estimators=200, validation_fraction=0.1, n_iter_no_change=10)
+# - Same feature encoding as Exp 1
+```
+**Rationale:** Pure sklearn baseline; research shows comparable f1 (0.786) to XGBoost. Validates if XGBoost-specific tuning is necessary.
+
+---
+
+### Experiment 5: One-Hot Encoding + XGBoost with Regularization
+**Priority:** MEDIUM  
+**Change:** Replace target encoding with one-hot encoding; add L1/L2 regularization via `reg_alpha` and `reg_lambda`.
+```python
+# In build_model():
+# - pd.get_dummies(categorical_features)
+# - XGBClassifier(..., max_depth=4, reg_alpha=1.0, reg_lambda=1.0, subsample=0.8, colsample_bytree=0.8)
+```
+**Rationale:** Tests if simpler encoding + regularization reduces overfitting on minority classes. Prevents aggressive minority class fitting.
+
+---
+
+### Experiment 6: SMOTE-Inspired Oversampling (RandomOverSampler)
+**Priority:** MEDIUM  
+**Change:** Apply RandomOverSampler from imbalanced-learn (sklearn-compatible) to minority classes before training.
+```python
+# In build_model():
+# - from imblearn.over_sampling import RandomOverSampler
+# - ros = RandomOverSampler(random_state=42)
+# - X_train_resampled, y_train_resampled = ros.fit_resample(

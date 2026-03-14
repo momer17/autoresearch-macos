@@ -1,0 +1,66 @@
+[
+  {
+    "iteration": 1,
+    "score": 0.9402656428642002,
+    "best_score": 0.9402656428642002,
+    "strategy": "Replace the LogisticRegression classifier with an XGBoost classifier using class-weight balancing to handle imbalanced classes, which should significantly improve f1_macro. Specifically, change the classifier step to `XGBClassifier(objective='multi:softprob', eval_metric='mlogloss', max_depth=6, learning_rate=0.1, n_estimators=300, subsample=0.8, colsample_bytree=0.8, reg_alpha=0.1, reg_lambda=1.0, random_state=42)` and compute sample weights inversely proportional to class frequencies (using `compute_sample_weight('balanced', y_train)`) passed via `model.fit(X, y_train, classifier__sample_weight=sample_weights)`. Keep the existing preprocessing pipeline (median imputation for numerics, one-hot encoding for categoricals) intact since it's already reasonable, and focus this first iteration purely on upgrading to a stronger gradient boosting model with proper class balancing \u2014 this addresses both the weak baseline classifier and the f1_macro requirement for balanced per-class performance simultaneously.",
+    "kept": true,
+    "error": null
+  },
+  {
+    "iteration": 2,
+    "score": null,
+    "best_score": 0.9402656428642002,
+    "strategy": "Given the already strong f1_macro of 0.9403, the next most promising incremental improvement is to add feature engineering before the preprocessing step: create a `service_count` feature that sums the number of \"Yes\" values across service-related columns (such as OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport-adjacent features, StreamingTV, StreamingMovies, etc.), and also add a `tenure_bin` feature using `pd.qcut` on the tenure column into 4 quantile-based bins. These engineered features capture customer engagement level and non-linear tenure effects that tree models may not fully exploit with raw features alone. Research and the experiment plan both highlight these as high-value additions, and since the current model uses no feature engineering at all, this is the natural next step to squeeze additional f1_macro performance from the existing XGBoost pipeline.",
+    "kept": false,
+    "error": "Traceback (most recent call last):\n  File \"D:\\Documents\\Coding projects\\Git Repos\\autoresearch-macos\\backend\\evaluate.py\", line 100, in run_evaluation\n    build_model = _load_build_model(model_code)\n  File \"D:\\Documents\\Coding projects\\Git Repos\\autoresearch-macos\\backend\\evaluate.py\", line 45, in _load_build_model\n    spec.loader.exec_module(module)\n    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^\n  File \"<frozen importlib._bootstrap_external>\", line 1022, in exec_module\n  File \"<frozen importlib._bootstrap_external>\", line 1160, in get_code\n  File \"<frozen importlib._bootstrap_external>\", line 1090, in source_to_code\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"D:\\Documents\\Coding projects\\Git Repos\\autoresearch-macos\\model.py\", line 5\n    The key challenge is encapsulating these transformations so they apply consistently during predict. I'll create a custom sklearn transformer for this.\n                                                                                                         ^\nSyntaxError: unterminated string literal (detected at line 5)\n"
+  },
+  {
+    "iteration": 3,
+    "score": 0.9202056411422177,
+    "best_score": 0.9402656428642002,
+    "strategy": "Given the already strong f1_macro of 0.9403 and that Iter 2 failed (returned None, likely due to a code error in feature engineering), the safest and most promising incremental change is to tune the XGBoost hyperparameters for better generalization. Specifically, reduce `max_depth` from 6 to 4 and increase `n_estimators` from 300 to 500 while lowering `learning_rate` from 0.1 to 0.05. This combination of a shallower tree with more boosting rounds and a smaller step size is a classic regularization strategy that often improves f1_macro by reducing overfitting on majority-class patterns and allowing the model to better capture minority-class decision boundaries. The change is minimal and low-risk: just update the three parameter values in the existing XGBClassifier constructor.",
+    "kept": false,
+    "error": null
+  },
+  {
+    "iteration": 4,
+    "score": 0.9311121238708142,
+    "best_score": 0.9402656428642002,
+    "strategy": "Looking at the history, the current model achieves f1_macro=0.9403 with XGBoost using balanced sample weights, one-hot encoding, and reasonable hyperparameters. Iter 2 failed (likely a code bug in feature engineering), and Iter 3 tried something that dropped performance to 0.9202. The current baseline is already quite strong at 0.9403.\n\nThe most promising incremental change is to tune the XGBoost hyperparameters toward a slightly shallower, more regularized model with more estimators and a lower learning rate, which often improves generalization on tabular data. Specifically, change `max_depth=4`, `learning_rate=0.05`, `n_estimators=600`, `min_child_weight=3`, and keep the existing `subsample=0.8`, `colsample_bytree=0.8`, `reg_alpha=0.1`, `reg_lambda=1.0`. A lower learning rate with more trees and reduced depth should reduce overfitting and improve f1_macro on minority classes, while `min_child_weight=3` adds additional regularization to prevent the model from creating overly specific leaf nodes for rare class instances.",
+    "kept": false,
+    "error": null
+  },
+  {
+    "iteration": 5,
+    "score": 0.9397701784597081,
+    "best_score": 0.9402656428642002,
+    "strategy": "Looking at the history, the current best model (f1_macro=0.9403) uses XGBoost with balanced sample weights, one-hot encoding, max_depth=6, learning_rate=0.1, n_estimators=300. Iter 3 and 4 both tried changes that reduced performance, so we need a careful incremental tweak. The score is already quite high at 0.9403, so fine-tuning hyperparameters is the most promising path. I suggest increasing `n_estimators` from 300 to 500 while reducing `learning_rate` from 0.1 to 0.05 \u2014 this classic combination allows the model to learn more gradually with more boosting rounds, which often yields a small but meaningful improvement in F1 by fitting the decision boundaries more precisely across all classes without overfitting (the existing regularization via subsample, colsample_bytree, reg_alpha, and reg_lambda should keep overfitting in check).",
+    "kept": false,
+    "error": null
+  },
+  {
+    "iteration": 6,
+    "score": 0.9415037354951519,
+    "best_score": 0.9415037354951519,
+    "strategy": "Looking at the history, the current best (0.9403) uses XGBoost with balanced sample weights, one-hot encoding, max_depth=6, learning_rate=0.1, n_estimators=300. Iterations 3-5 all tried various changes (LightGBM, hyperparameter tweaks, feature engineering) and scored lower. The score is already quite high at 0.9403, so we need a careful incremental change. One thing not yet tried is increasing the number of estimators while reducing the learning rate \u2014 a classic boosting improvement that allows finer convergence. Specifically, change `learning_rate=0.05` and `n_estimators=600` (keeping all other parameters the same), which gives the model more granular boosting rounds to better separate classes and improve per-class F1 without overfitting, especially when combined with the existing subsample/colsample regularization.",
+    "kept": true,
+    "error": null
+  },
+  {
+    "iteration": 7,
+    "score": 0.9429214005971538,
+    "best_score": 0.9429214005971538,
+    "strategy": "Looking at the history, the current best (0.9415) uses XGBoost with max_depth=6, learning_rate=0.05, n_estimators=600, subsample=0.8, colsample_bytree=0.8, reg_alpha=0.1, reg_lambda=1.0. The improvement from Iter 1 (0.9403) to Iter 6 (0.9415) came from tuning these hyperparameters (lower learning rate, more estimators, added regularization and subsampling). The next promising incremental change is to increase `n_estimators` to 1000 and reduce `learning_rate` to 0.03, since the combination of a lower learning rate with more boosting rounds allows finer-grained optimization and often improves generalization \u2014 the jump from Iter 1 to Iter 6 already demonstrated this trend, and we haven't yet pushed it further in this direction.",
+    "kept": true,
+    "error": null
+  },
+  {
+    "iteration": 8,
+    "score": 0.9421836646610183,
+    "best_score": 0.9429214005971538,
+    "strategy": "Looking at the history, the score improved from 0.9403 \u2192 0.9415 \u2192 0.9429, with the last two improvements coming from tuning learning_rate (0.05\u21920.03) and n_estimators (600\u21921000). This suggests the model benefits from slower learning with more trees. The next logical incremental step in this direction is to reduce `min_child_weight` from its default of 1 to a smaller value like 3 or increase it to reduce overfitting on minority classes \u2014 but more promising given the trajectory is to try increasing `n_estimators` to 1500 while reducing `learning_rate` to 0.02, continuing the trend that has consistently improved scores. Specifically, change `learning_rate=0.02` and `n_estimators=1500` to allow even finer gradient steps with sufficient boosting rounds to converge, which should yield a small but meaningful improvement in f1_macro given the clear pattern of gains from this direction.",
+    "kept": false,
+    "error": null
+  }
+]
