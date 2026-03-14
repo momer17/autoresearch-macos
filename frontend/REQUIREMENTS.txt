@@ -1,0 +1,146 @@
+AUTORESEARCH FRONTEND REQUIREMENTS
+===================================
+Goal: A functional dashboard to start experiments and watch them run live.
+No fancy design needed — clean, readable, working.
+Time budget: 6 hours.
+
+---
+
+HOUR 1 — Foundation (API layer + types + routing)
+--------------------------------------------------
+[ ] Create src/lib/api.ts
+      - Define TypeScript interfaces for all API shapes:
+          Iteration { iteration, score, best_score, strategy, kept, duration_s }
+          StatusResponse { status, baseline, best_score, current_iteration, total_iterations, research_summary, iterations }
+          StartRequest { target_col, task_description, csv_path }
+      - Export API_BASE_URL constant (one place to swap the GPU IP)
+      - Export postStart(payload: StartRequest): Promise<void>
+      - Export getStatus(): Promise<StatusResponse>
+
+[ ] Create src/lib/mockData.ts
+      - A hardcoded StatusResponse with 5+ iterations (running state)
+      - Use this everywhere until the real backend is ready
+      - Add a flag: USE_MOCK = true  (flip to false when backend is live)
+
+[ ] Set up routing — two pages only:
+      /        → StartPage   (the launch form)
+      /run     → DashboardPage (live view, redirect here after /start succeeds)
+      Use React Router or just a simple useState("start" | "dashboard") — no need for full router
+
+
+HOUR 2 — Start Page
+--------------------
+[ ] StartPage component (src/pages/StartPage.tsx)
+      Form fields:
+        - target_col        (text input, required)
+        - task_description  (textarea, required)
+        - csv_path          (text input, required — path on the GPU machine)
+      On submit:
+        - Call postStart()
+        - On success → navigate to DashboardPage
+        - On error → show inline error message
+        - Disable button while loading, show spinner or "Starting..."
+      Note: csv_path is a path on the *server*, not a file upload
+
+
+HOUR 3 — Dashboard Page + Polling
+-----------------------------------
+[ ] DashboardPage component (src/pages/DashboardPage.tsx)
+      On mount: start polling getStatus() every 3 seconds
+      On unmount: clear the interval (avoid memory leaks)
+      Store the full StatusResponse in useState
+      When status === "complete" or "error": stop polling
+
+[ ] StatusBadge component
+      Displays: "Running" | "Complete" | "Error"
+      Color-coded (green/grey/red) — just use inline style or a className, no library needed
+
+
+HOUR 4 — Score Display + Progress
+-----------------------------------
+[ ] ScorePanel component
+      Shows:
+        - Baseline score (val_bpb from first run)
+        - Best score so far
+        - Delta / improvement  (baseline - best_score, formatted to 4 decimal places)
+      Remember: LOWER val_bpb = better
+
+[ ] ProgressBar component
+      Shows: current_iteration / total_iterations
+      Plain HTML progress element is fine, no library needed
+      Label: "Iteration 3 / 8"
+
+
+HOUR 5 — Iteration Log + Research Summary
+------------------------------------------
+[ ] IterationTable component
+      Renders iterations[] as a table with columns:
+        # | Score | Best | Strategy | Kept | Duration
+      "Kept" column: show ✓ or ✗ (green/red)
+      Most recent iteration at the TOP (reverse order)
+      Strategy column: truncate long text, full text on hover (title attribute)
+      Scroll if list is long (max-height + overflow-y: auto)
+
+[ ] ResearchSummary component
+      Renders research_summary as a collapsible section
+      Collapsed by default (it can be long)
+      Toggle open/closed on click
+
+
+HOUR 6 — Wire up + Error handling + Polish
+-------------------------------------------
+[ ] Error states
+      - If getStatus() throws: show "Connection error — retrying..." and keep polling
+      - If status === "error": show error state prominently, stop polling
+
+[ ] Loading state
+      - On first load before any data arrives: show a simple loading indicator
+      - Don't flash empty/broken UI
+
+[ ] Swap mock → real
+      - Set USE_MOCK = false in api.ts
+      - Update API_BASE_URL to the GPU machine IP (e.g. http://<IP>:8080)
+
+[ ] Final check
+      - Test the full flow: fill form → submit → watch dashboard update
+      - Make sure polling stops when experiment completes
+      - Make sure page doesn't break on refresh (redirect back to / if no data)
+
+---
+
+FILE STRUCTURE TO AIM FOR
+--------------------------
+src/
+  lib/
+    api.ts          ← all API calls + TypeScript types
+    mockData.ts     ← fake data for dev
+  pages/
+    StartPage.tsx
+    DashboardPage.tsx
+  components/
+    StatusBadge.tsx
+    ScorePanel.tsx
+    ProgressBar.tsx
+    IterationTable.tsx
+    ResearchSummary.tsx
+  App.tsx           ← routing / page switching
+  main.tsx          ← untouched
+
+---
+
+DEPENDENCIES NEEDED
+--------------------
+- React Router DOM (optional, simple state switch is fine for 2 pages):
+    npm install react-router-dom
+- Nothing else. No UI library needed.
+
+---
+
+KEY RULES
+---------
+1. ONE place for the API base URL. Never hardcode the IP more than once.
+2. USE_MOCK flag in api.ts. Flip it without touching components.
+3. Types first. Define the interfaces in api.ts before building any component.
+4. Poll every 3 seconds. Stop when status is "complete" or "error".
+5. val_bpb: lower is better. Display the improvement as baseline - best_score (positive = good).
+6. Don't block on design. Use plain HTML elements. Style last, functionality first.
