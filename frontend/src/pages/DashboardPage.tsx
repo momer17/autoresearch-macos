@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getStatus } from "../lib/api";
+import { getStatus, postStop } from "../lib/api";
 import type { StatusResponse } from "../lib/api";
 
 const POLL_INTERVAL = 2000;
@@ -11,6 +11,7 @@ const STATUS_STEP: Record<StatusResponse["status"], number> = {
   running_baseline: 2,
   running: 3,
   complete: 4,
+  stopped: 4,
   error: 4,
 };
 
@@ -27,6 +28,7 @@ const STATUS_COLOR: Record<StatusResponse["status"], string> = {
   running_baseline: "#f59e0b",
   running:          "#3b82f6",
   complete:         "#22c55e",
+  stopped:          "#f97316",
   error:            "#ef4444",
 };
 
@@ -36,10 +38,11 @@ const STATUS_LABEL: Record<StatusResponse["status"], string> = {
   running_baseline: "Running baseline",
   running:          "Running",
   complete:         "Complete",
+  stopped:          "Stopped",
   error:            "Error",
 };
 
-const DONE = new Set<StatusResponse["status"]>(["complete", "error"]);
+const DONE = new Set<StatusResponse["status"]>(["complete", "stopped", "error"]);
 
 interface Props {
   metric: string;
@@ -77,6 +80,8 @@ function TextBlock({ text, label }: { text: string; label: string }) {
 export default function DashboardPage({ metric }: Props) {
   const [data, setData] = useState<StatusResponse | null>(null);
   const [connError, setConnError] = useState(false);
+  const [stopError, setStopError] = useState("");
+  const [stopPending, setStopPending] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function stopPolling() {
@@ -100,6 +105,19 @@ export default function DashboardPage({ metric }: Props) {
     return stopPolling;
   }, []);
 
+  async function handleStop() {
+    setStopError("");
+    setStopPending(true);
+    try {
+      await postStop();
+      await poll();
+    } catch (error) {
+      setStopError(error instanceof Error ? error.message : "Failed to stop experiment.");
+    } finally {
+      setStopPending(false);
+    }
+  }
+
   if (!data) {
     return (
       <div style={s.page}>
@@ -115,7 +133,8 @@ export default function DashboardPage({ metric }: Props) {
       : null;
 
   const reversed = [...data.iterations].reverse();
-  const isRunning = data.status === "running" || data.status === "complete";
+  const showProgress = data.status === "running" || data.status === "complete" || data.status === "stopped";
+  const canStop = data.status === "setting_up" || data.status === "running_baseline" || data.status === "running";
 
   return (
     <div style={s.page}>
@@ -127,12 +146,24 @@ export default function DashboardPage({ metric }: Props) {
             <div style={s.logo}>autoresearch</div>
             <div style={s.metricLine}>Optimising for <strong>{metric}</strong></div>
           </div>
-          <span style={{ ...s.badge, color: STATUS_COLOR[data.status] }}>
-            ● {STATUS_LABEL[data.status]}
-          </span>
+          <div style={s.headerActions}>
+            {canStop && (
+              <button
+                style={{ ...s.stopButton, ...(stopPending || data.stop_requested ? s.stopButtonDisabled : {}) }}
+                onClick={handleStop}
+                disabled={stopPending || data.stop_requested}
+              >
+                {stopPending || data.stop_requested ? "Stopping…" : "Stop experiment"}
+              </button>
+            )}
+            <span style={{ ...s.badge, color: STATUS_COLOR[data.status] }}>
+              ● {STATUS_LABEL[data.status]}
+            </span>
+          </div>
         </div>
 
         {connError && <p style={s.connError}>⚠ Connection error — retrying…</p>}
+        {stopError && <p style={s.connError}>⚠ {stopError}</p>}
 
         {/* ── Pipeline steps ── */}
         <div style={s.pipeline}>
@@ -199,7 +230,7 @@ export default function DashboardPage({ metric }: Props) {
         </div>
 
         {/* ── Progress bar (optimise phase) ── */}
-        {isRunning && data.total_iterations > 0 && (
+        {showProgress && data.total_iterations > 0 && (
           <div style={s.progressSection}>
             <div style={s.progressLabel}>
               Iteration {data.current_iteration} / {data.total_iterations}
@@ -227,7 +258,7 @@ export default function DashboardPage({ metric }: Props) {
         </div>
 
         {/* ── Error ── */}
-        {data.status === "error" && data.error && (
+        {(data.status === "error" || data.status === "stopped") && data.error && (
           <pre style={s.errorBox}>{data.error}</pre>
         )}
 
@@ -343,6 +374,11 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
     justifyContent: "space-between",
   },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+  },
   logo: {
     fontSize: "1.25rem",
     fontWeight: 700,
@@ -358,6 +394,21 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: "0.85rem",
     fontWeight: 600,
     marginTop: "0.2rem",
+  },
+  stopButton: {
+    border: "1px solid #7f1d1d",
+    backgroundColor: "#220f12",
+    color: "#fca5a5",
+    borderRadius: "999px",
+    padding: "0.55rem 0.9rem",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "opacity 0.2s ease",
+  },
+  stopButtonDisabled: {
+    opacity: 0.6,
+    cursor: "not-allowed",
   },
   connError: {
     margin: 0,

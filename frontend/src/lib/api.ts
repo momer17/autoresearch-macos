@@ -12,7 +12,7 @@ export interface Iteration {
 }
 
 export interface StatusResponse {
-  status: "idle" | "setting_up" | "running_baseline" | "running" | "complete" | "error";
+  status: "idle" | "setting_up" | "running_baseline" | "running" | "complete" | "stopped" | "error";
   experiment_id: string | null;
   stage_label: string;
   baseline: number | null;
@@ -27,6 +27,7 @@ export interface StatusResponse {
   current_code: string;
   iterations: Iteration[];
   error: string | null;
+  stop_requested: boolean;
 }
 
 export interface StartRequest {
@@ -41,6 +42,12 @@ export interface StartResponse {
   status: string;
   task_type: string;
   metric: string;
+}
+
+export interface StopResponse {
+  status: string;
+  experiment_id?: string | null;
+  message: string;
 }
 
 // --- API calls ---
@@ -68,6 +75,17 @@ export async function getStatus(): Promise<StatusResponse> {
   const res = await fetch(`${API_BASE_URL}/status`);
   if (!res.ok) {
     throw new Error(`Failed to fetch status: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function postStop(): Promise<StopResponse> {
+  const res = await fetch(`${API_BASE_URL}/stop`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to stop: ${res.status} ${text}`);
   }
   return res.json();
 }

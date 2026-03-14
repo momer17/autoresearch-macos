@@ -11,7 +11,7 @@ RESULTS_DIR = REPO_ROOT / "results"
 
 # Global experiment state — api.py reads this directly
 state = {
-    "status": "idle",           # idle | setting_up | running_baseline | running | complete | error
+    "status": "idle",           # idle | setting_up | running_baseline | running | complete | stopped | error
     "experiment_id": None,
     "stage_label": "",          # human-readable label of what is happening right now
     "baseline": None,           # baseline score (float)
@@ -26,6 +26,7 @@ state = {
     "current_code": "",         # Python from coder (latest)
     "iterations": [],           # list of iteration records
     "error": None,
+    "stop_requested": False,
 }
 
 
@@ -43,6 +44,20 @@ def _is_improvement(new_score: float, best_score: float, metric: str) -> bool:
     if higher_is_better(metric):
         return new_score > best_score
     return new_score < best_score
+
+
+def _mark_stopped():
+    state["status"] = "stopped"
+    state["stage_label"] = "Experiment stopped."
+    state["stop_requested"] = False
+    state["error"] = None
+
+
+def _should_stop() -> bool:
+    if state.get("stop_requested"):
+        _mark_stopped()
+        return True
+    return False
 
 
 def _run(config: dict):
@@ -67,6 +82,7 @@ def _run(config: dict):
         "current_code": "",
         "iterations": [],
         "error": None,
+        "stop_requested": False,
     })
 
     try:
@@ -80,21 +96,29 @@ def _run(config: dict):
         state["stage_label"] = "Research agent: scanning ML literature..."
         research = run_research(config, task)
         state["research_summary"] = research
+        if _should_stop():
+            return
 
         # --- Program generator ---
         state["stage_label"] = "Program generator: building experiment plan..."
         program = generate_program(config, research, task)
         state["program"] = program
+        if _should_stop():
+            return
 
         # --- Baseline generator ---
         state["stage_label"] = "Baseline generator: writing initial model..."
         baseline_code = generate_baseline(config, task)
         state["baseline_code"] = baseline_code
+        if _should_stop():
+            return
 
         # --- Baseline evaluation ---
         state["status"] = "running_baseline"
         state["stage_label"] = "Evaluating baseline model..."
         baseline_result = run_evaluation(baseline_code, config)
+        if _should_stop():
+            return
 
         if not baseline_result["success"]:
             state["status"] = "error"
@@ -110,6 +134,9 @@ def _run(config: dict):
 
         # --- Optimisation loop ---
         for i in range(total):
+            if _should_stop():
+                return
+
             state["status"] = "running"
             state["current_iteration"] = i + 1
 
@@ -118,13 +145,19 @@ def _run(config: dict):
             state["current_code"] = ""
             strategy = get_strategy(best_code, program, research, history, config)
             state["current_strategy"] = strategy
+            if _should_stop():
+                return
 
             state["stage_label"] = f"Coder: implementing iteration {i + 1}..."
             new_code = write_model(strategy, best_code, config)
             state["current_code"] = new_code
+            if _should_stop():
+                return
 
             state["stage_label"] = f"Evaluating iteration {i + 1}..."
             result = run_evaluation(new_code, config)
+            if _should_stop():
+                return
 
             if result["success"] and result["score"] is not None:
                 score = result["score"]
@@ -168,6 +201,20 @@ def start_experiment(config: dict):
     state["experiment_id"] = config.get("experiment_id", str(uuid.uuid4())[:8])
     t = threading.Thread(target=_run, args=(config,), daemon=True)
     t.start()
+
+
+def stop_experiment() -> dict:
+    active_statuses = {"setting_up", "running_baseline", "running"}
+    if state.get("status") not in active_statuses:
+        return {"status": state.get("status"), "message": "No active experiment to stop."}
+
+    state["stop_requested"] = True
+    state["stage_label"] = "Stopping after current step..."
+    return {
+        "status": "stopping",
+        "experiment_id": state.get("experiment_id"),
+        "message": "Stop requested.",
+    }
 
 
 def get_status() -> dict:
