@@ -2,7 +2,8 @@ def generate_baseline(config: dict, task_description: str) -> str:
     """Returns a deterministic, intentionally simple baseline model.py."""
     task_type = config.get("task_type", "binary_classification")
     if task_type == "regression":
-        return '''import pandas as pd
+        return '''import numpy as np
+import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
@@ -15,12 +16,12 @@ def build_model(X_train, y_train):
 
     for col in X.columns:
         if pd.api.types.is_object_dtype(X[col]) or pd.api.types.is_string_dtype(X[col]):
-            cleaned = X[col].astype("string").str.strip().replace("", pd.NA)
+            cleaned = X[col].astype("string").str.strip().replace("", np.nan)
             numeric = pd.to_numeric(cleaned, errors="coerce")
             if numeric.notna().sum() == cleaned.notna().sum() and cleaned.notna().sum() > 0:
                 X[col] = numeric
             else:
-                X[col] = cleaned
+                X[col] = cleaned.astype(object)
 
     numeric_cols = X.select_dtypes(include=["number", "bool"]).columns.tolist()
     categorical_cols = [col for col in X.columns if col not in numeric_cols]
@@ -53,7 +54,8 @@ def build_model(X_train, y_train):
     return model
 '''
 
-    return '''import pandas as pd
+    return '''import numpy as np
+import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -66,12 +68,12 @@ def build_model(X_train, y_train):
 
     for col in X.columns:
         if pd.api.types.is_object_dtype(X[col]) or pd.api.types.is_string_dtype(X[col]):
-            cleaned = X[col].astype("string").str.strip().replace("", pd.NA)
+            cleaned = X[col].astype("string").str.strip().replace("", np.nan)
             numeric = pd.to_numeric(cleaned, errors="coerce")
             if numeric.notna().sum() == cleaned.notna().sum() and cleaned.notna().sum() > 0:
                 X[col] = numeric
             else:
-                X[col] = cleaned
+                X[col] = cleaned.astype(object)
 
     numeric_cols = X.select_dtypes(include=["number", "bool"]).columns.tolist()
     categorical_cols = [col for col in X.columns if col not in numeric_cols]
