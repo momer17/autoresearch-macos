@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { getStatus, postStop } from "../lib/api";
 import type { StatusResponse } from "../lib/api";
+import AgentTimeline, { detectAgentType, extractIteration } from "../components/AgentTimeline";
+import type { TimelineEntry } from "../components/AgentTimeline";
+import ResultsDashboard from "../components/ResultsDashboard";
 
 const POLL_INTERVAL = 2000;
 
@@ -82,7 +85,10 @@ export default function DashboardPage({ metric }: Props) {
   const [connError, setConnError] = useState(false);
   const [stopError, setStopError] = useState("");
   const [stopPending, setStopPending] = useState(false);
+  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevStageLabelRef = useRef<string>("");
+  const timelineIdRef = useRef(0);
 
   function stopPolling() {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -93,6 +99,19 @@ export default function DashboardPage({ metric }: Props) {
       const res = await getStatus();
       setData(res);
       setConnError(false);
+      if (res.stage_label && res.stage_label !== prevStageLabelRef.current) {
+        prevStageLabelRef.current = res.stage_label;
+        setTimelineEntries((prev) => [
+          ...prev,
+          {
+            id: timelineIdRef.current++,
+            label: res.stage_label,
+            timestamp: new Date(),
+            agentType: detectAgentType(res.stage_label),
+            iteration: extractIteration(res.stage_label),
+          },
+        ]);
+      }
       if (DONE.has(res.status)) stopPolling();
     } catch {
       setConnError(true);
@@ -244,6 +263,12 @@ export default function DashboardPage({ metric }: Props) {
           </div>
         )}
 
+        {/* ── Agent timeline ── */}
+        <AgentTimeline
+          entries={timelineEntries}
+          isLive={!DONE.has(data.status)}
+        />
+
         {/* ── Agent outputs ── */}
         <div style={s.outputsSection}>
           <TextBlock label="🔍 Research findings" text={data.research_summary} />
@@ -256,6 +281,16 @@ export default function DashboardPage({ metric }: Props) {
             <CodeBlock label={`⚡ Generated code (iter ${data.current_iteration})`} code={data.current_code} />
           )}
         </div>
+
+        {/* ── Results dashboard ── */}
+        {(data.status === "complete" || data.status === "stopped") && data.iterations.length > 0 && (
+          <ResultsDashboard
+            iterations={data.iterations}
+            baseline={data.baseline}
+            best_score={data.best_score}
+            metric={metric}
+          />
+        )}
 
         {/* ── Error ── */}
         {(data.status === "error" || data.status === "stopped") && data.error && (
