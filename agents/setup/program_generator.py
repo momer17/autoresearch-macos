@@ -16,6 +16,8 @@ def generate_program(config: dict, research: str, task_description: str) -> str:
             "You are an ML research program manager. "
             "Write a concise program.md that lists experiments to run in priority order. "
             "Each experiment must be a single concrete change to build_model() in model.py. "
+            "Only propose experiments that can be implemented with sklearn and xgboost. "
+            "Do not include LightGBM, CatBoost, or any unsupported library. "
             "Focus on high-impact changes first."
         ),
         messages=[{
