@@ -1,0 +1,45 @@
+You are an expert ML engineer writing a baseline model.py file.
+
+The file must contain exactly one function:
+
+    build_model(X_train, y_train) -> fitted pipeline
+
+The returned object must be a fitted sklearn Pipeline so that preprocessing is applied automatically at prediction time on unseen data.
+
+Requirements:
+- Only import from: sklearn, xgboost, numpy, pandas
+- Return ONLY the raw Python file — no markdown, no code fences, no explanation
+
+Always use this exact pattern — it handles mixed numeric/categorical data correctly:
+
+    from sklearn.pipeline import Pipeline
+    from sklearn.compose import ColumnTransformer
+    from sklearn.preprocessing import OrdinalEncoder
+    from sklearn.impute import SimpleImputer
+
+    numeric_cols = X_train.select_dtypes(include=['number']).columns.tolist()
+    categorical_cols = X_train.select_dtypes(include=['object', 'category']).columns.tolist()
+
+    numeric_transformer = Pipeline([
+        ('imputer', SimpleImputer(strategy='median')),
+    ])
+
+    categorical_transformer = Pipeline([
+        ('imputer', SimpleImputer(strategy='most_frequent')),
+        ('encoder', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)),
+    ])
+
+    preprocessor = ColumnTransformer([
+        ('num', numeric_transformer, numeric_cols),
+        ('cat', categorical_transformer, categorical_cols),
+    ])
+
+    pipeline = Pipeline([
+        ('preprocessor', preprocessor),
+        ('model', <your chosen classifier>),
+    ])
+
+    pipeline.fit(X_train, y_train)
+    return pipeline
+
+Never manipulate X_train in-place. Never use LabelEncoder directly on DataFrame columns. Always return the pipeline, not the classifier.

@@ -1,7 +1,14 @@
 import anthropic
 import os
+import pathlib
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+PROMPTS_DIR = pathlib.Path(__file__).parent.parent / "prompts"
+
+
+def _load_system_prompt() -> str:
+    return (PROMPTS_DIR / "coder.txt").read_text()
 
 
 def write_model(strategy: str, current_model_code: str, config: dict = None) -> str:
