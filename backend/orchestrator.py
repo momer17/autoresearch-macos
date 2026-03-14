@@ -1,31 +1,51 @@
+import json
 import threading
+import traceback
 import uuid
 from pathlib import Path
 
-from backend.evaluate import run_training, restore_backup
+from backend.evaluate import run_evaluation, higher_is_better
 
 REPO_ROOT = Path(__file__).parent.parent
-TRAIN_PY = REPO_ROOT / "train.py"
+RESULTS_DIR = REPO_ROOT / "results"
 
 # Global experiment state — api.py reads this directly
 state = {
-    "status": "idle",
+    "status": "idle",          # idle | setting_up | running_baseline | running | complete | error
     "experiment_id": None,
-    "baseline": None,
-    "best_score": None,
+    "baseline": None,          # baseline score (float)
+    "best_score": None,        # best score seen so far
     "current_iteration": 0,
     "total_iterations": 8,
     "research_summary": "",
-    "iterations": [],
+    "iterations": [],          # list of iteration records
     "error": None,
 }
+
+
+def _write_result(experiment_id: str, record: dict):
+    RESULTS_DIR.mkdir(exist_ok=True)
+    path = RESULTS_DIR / f"{experiment_id}.json"
+    history = []
+    if path.exists():
+        history = json.loads(path.read_text())
+    history.append(record)
+    path.write_text(json.dumps(history, indent=2))
+
+
+def _is_improvement(new_score: float, best_score: float, metric: str) -> bool:
+    if higher_is_better(metric):
+        return new_score > best_score
+    return new_score < best_score
 
 
 def _run(config: dict):
     global state
 
+    experiment_id = state["experiment_id"]
     total = config.get("total_iterations", 8)
-    task = config.get("task_description", "Improve LLM training efficiency")
+    task = config.get("task_description", "Improve model performance")
+    metric = config["metric"]
 
     state.update({
         "status": "setting_up",
@@ -45,7 +65,7 @@ def _run(config: dict):
         from agents.loop.strategist import get_strategy
         from agents.loop.coder import write_model
 
-        # --- Setup phase (runs once) ---
+        # --- Setup phase (once) ---
         state["research_summary"] = "Running research..."
         research = run_research(config, task)
 
@@ -57,14 +77,13 @@ def _run(config: dict):
 
         state["research_summary"] = research[:600] if research else "Research complete."
 
-        # --- Baseline run ---
+        # --- Baseline evaluation ---
         state["status"] = "running_baseline"
-        baseline_result = run_training(baseline_code, f"{state['experiment_id']}_baseline")
+        baseline_result = run_evaluation(baseline_code, config)
 
         if not baseline_result["success"]:
             state["status"] = "error"
-            state["error"] = f"Baseline failed: {baseline_result.get('error')} | stdout: {baseline_result.get('stdout', '')[-500:]}"
-            restore_backup()
+            state["error"] = f"Baseline failed:\n{baseline_result.get('error')}"
             return
 
         best_score = baseline_result["score"]
@@ -79,25 +98,26 @@ def _run(config: dict):
             state["status"] = "running"
             state["current_iteration"] = i + 1
 
-            strategy = get_strategy(best_code, program, research, history)
-            new_code = write_model(strategy, best_code)
+            strategy = get_strategy(best_code, program, research, history, config)
+            new_code = write_model(strategy, best_code, config)
 
-            result = run_training(new_code, f"{state['experiment_id']}_iter_{i + 1}")
+            result = run_evaluation(new_code, config)
 
             if result["success"] and result["score"] is not None:
                 score = result["score"]
-                kept = score < best_score
+                kept = _is_improvement(score, best_score, metric)
                 if kept:
                     best_score = score
                     best_code = new_code
                     state["best_score"] = best_score
+
                 record = {
                     "iteration": i + 1,
                     "score": score,
                     "best_score": best_score,
                     "strategy": strategy,
                     "kept": kept,
-                    "duration_s": result["duration_s"],
+                    "error": None,
                 }
             else:
                 record = {
@@ -106,20 +126,18 @@ def _run(config: dict):
                     "best_score": best_score,
                     "strategy": strategy,
                     "kept": False,
-                    "duration_s": result["duration_s"],
                     "error": result.get("error"),
                 }
 
             state["iterations"].append(record)
             history.append(record)
+            _write_result(experiment_id, record)
 
         state["status"] = "complete"
 
-    except Exception as e:
-        import traceback
+    except Exception:
         state["status"] = "error"
         state["error"] = traceback.format_exc()
-        restore_backup()
 
 
 def start_experiment(config: dict):
