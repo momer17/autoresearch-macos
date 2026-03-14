@@ -19,10 +19,13 @@ COMPLETED
       - No router needed for 2 pages
 
 [x] src/pages/StartPage.tsx
-      - Full-screen chat interface (dark mode)
+      - Two-column layout: chat (left, flex) + CSV sidebar (right, 220px fixed)
+      - Input bar always visible on all stages (except "starting")
       - Stage machine: drop_csv → pick_target → describe_goal → starting
-      - Drag-and-drop CSV upload, reads column headers client-side
-      - Column chips for picking target
+      - CSV sidebar: drag-and-drop or click-to-browse; shows filename + column count once loaded
+      - "Change file" button resets to drop_csv stage
+      - Column chips for target selection; user can also type column name
+      - Typing before CSV upload shows bot nudge instead of breaking flow
       - Sends only: file, target_col, task_description, total_iterations
       - Backend auto-infers metric, task_type, feature_cols
       - On success: passes { metric, task_type } from /start response up to App
@@ -42,6 +45,20 @@ COMPLETED
 
 [x] vite.config.ts
       - Proxy: /api → http://localhost:8080 (swap target for GPU IP)
+
+---
+
+TODO — NEXT
+-----------
+[ ] End-to-end test with live backend
+      - Update proxy target in vite.config.ts to GPU server IP
+      - Verify POST /start returns valid metric + task_type
+      - Verify GET /status polling + iteration table populate correctly
+
+[ ] DashboardPage polish (optional)
+      - "New experiment" / restart button after complete/error
+      - Metric direction label (e.g. "lower is better" for rmse)
+      - Copy experiment_id to clipboard
 
 ---
 
@@ -108,3 +125,4 @@ KEY RULES
 5. Metric direction: higher is better for f1/accuracy/roc_auc/r2 — lower for rmse/mae.
 6. score in iterations can be null — always null-check before displaying.
 7. No UI libraries needed.
+8. Input bar is always visible — never hide it except during "starting" stage.
