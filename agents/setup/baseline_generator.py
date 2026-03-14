@@ -16,12 +16,13 @@ def build_model(X_train, y_train):
 
     for col in X.columns:
         if pd.api.types.is_object_dtype(X[col]) or pd.api.types.is_string_dtype(X[col]):
-            cleaned = X[col].astype("string").str.strip().replace("", np.nan)
+            cleaned = X[col].map(lambda value: value.strip() if isinstance(value, str) else value)
+            cleaned = cleaned.replace("", np.nan)
             numeric = pd.to_numeric(cleaned, errors="coerce")
             if numeric.notna().sum() == cleaned.notna().sum() and cleaned.notna().sum() > 0:
                 X[col] = numeric
             else:
-                X[col] = cleaned.astype(object)
+                X[col] = cleaned.astype(object).where(cleaned.notna(), np.nan)
 
     numeric_cols = X.select_dtypes(include=["number", "bool"]).columns.tolist()
     categorical_cols = [col for col in X.columns if col not in numeric_cols]
@@ -68,12 +69,13 @@ def build_model(X_train, y_train):
 
     for col in X.columns:
         if pd.api.types.is_object_dtype(X[col]) or pd.api.types.is_string_dtype(X[col]):
-            cleaned = X[col].astype("string").str.strip().replace("", np.nan)
+            cleaned = X[col].map(lambda value: value.strip() if isinstance(value, str) else value)
+            cleaned = cleaned.replace("", np.nan)
             numeric = pd.to_numeric(cleaned, errors="coerce")
             if numeric.notna().sum() == cleaned.notna().sum() and cleaned.notna().sum() > 0:
                 X[col] = numeric
             else:
-                X[col] = cleaned.astype(object)
+                X[col] = cleaned.astype(object).where(cleaned.notna(), np.nan)
 
     numeric_cols = X.select_dtypes(include=["number", "bool"]).columns.tolist()
     categorical_cols = [col for col in X.columns if col not in numeric_cols]
