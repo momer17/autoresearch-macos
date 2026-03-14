@@ -1,4 +1,5 @@
 # LOCKED - do not modify
+from functools import lru_cache
 import importlib.util
 import sys
 import traceback
@@ -33,6 +34,12 @@ METRIC_DIRECTION = {
 
 def higher_is_better(metric: str) -> bool:
     return METRIC_DIRECTION.get(metric, True)
+
+
+@lru_cache(maxsize=32)
+def _read_csv_cached(csv_path: str, mtime_ns: int, size: int) -> pd.DataFrame:
+    """Cache parsed CSVs within the backend process to avoid reloading each iteration."""
+    return pd.read_csv(csv_path)
 
 
 def _load_build_model(model_code: str):
@@ -86,7 +93,9 @@ def run_evaluation(model_code: str, config: dict) -> dict:
     task_type = config.get("task_type", "binary_classification")
 
     try:
-        df = pd.read_csv(config["csv_path"])
+        csv_path = config["csv_path"]
+        stat = Path(csv_path).stat()
+        df = _read_csv_cached(csv_path, stat.st_mtime_ns, stat.st_size)
         target_col = config["target_col"]
         feature_cols = config.get("feature_cols") or [c for c in df.columns if c != target_col]
 
