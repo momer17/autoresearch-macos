@@ -1,114 +1,40 @@
-# autoresearch
+# Experiment Plan: Customer Churn Prediction (F1 Optimization)
 
-This is an experiment to have the LLM do its own research.
+## Priority-Ordered Experiments
 
-## Setup
+1. **Implement XGBoost with class weight balancing and stratified cross-validation**
+   - Change: Replace default classifier with `XGBClassifier(scale_pos_weight=calculate_scale_pos_weight(), random_state=42)` and use `StratifiedKFold(n_splits=5)` in cross-validation pipeline
+   - Rationale: Gradient boosting is the proven highest-impact approach for churn; `scale_pos_weight` directly addresses class imbalance for F1 optimization
+   - Expected impact: Baseline F1 improvement of 5-15%
 
-To set up a new experiment, work with the user to:
+2. **Apply SMOTE oversampling on training data with stratified splitting**
+   - Change: Add `from imblearn.pipeline import Pipeline; from imblearn.over_sampling import SMOTE` and insert SMOTE before model training in the pipeline, ensuring stratified train/test split before SMOTE application
+   - Rationale: SMOTE is critical for minority class representation; prevents model bias and improves recall (precision-recall balance needed for F1)
+   - Expected impact: 3-8% F1 improvement, particularly in recall lift
 
-1. **Agree on a run tag**: propose a tag based on today's date (e.g. `mar5`). The branch `autoresearch/<tag>` must not already exist — this is a fresh run.
-2. **Create the branch**: `git checkout -b autoresearch/<tag>` from current master.
-3. **Read the in-scope files**: The repo is small. Read these files for full context:
-   - `README.md` — repository context.
-   - `prepare.py` — fixed constants, data prep, tokenizer, dataloader, evaluation. Do not modify.
-   - `train.py` — the file you modify. Model architecture, optimizer, training loop.
-4. **Verify data exists**: Check that `~/.cache/autoresearch/` contains data shards and a tokenizer. If not, tell the human to run `uv run prepare.py`.
-5. **Initialize results.tsv**: Create `results.tsv` with just the header row. The baseline will be recorded after the first run.
-6. **Confirm and go**: Confirm setup looks good.
+3. **Implement probability threshold tuning on validation set**
+   - Change: After model training, use `from sklearn.metrics import precision_recall_curve` to compute optimal threshold maximizing F1 on validation fold, then apply this threshold to predictions: `y_pred = (y_pred_proba >= optimal_threshold).astype(int)`
+   - Rationale: Default 0.5 threshold is suboptimal for imbalanced churn; F1 is often maximized at thresholds between 0.3-0.4
+   - Expected impact: 2-6% F1 improvement with minimal computational cost
 
-Once you get confirmation, kick off the experimentation.
+4. **Replace with LightGBM and optimize for F1 with early stopping**
+   - Change: Use `LGBMClassifier(objective='binary', metric='binary_logloss', class_weight='balanced', num_leaves=31, learning_rate=0.05)` with `early_stopping_rounds=50` monitoring validation F1 score
+   - Rationale: LightGBM often outperforms XGBoost on categorical/mixed data; `class_weight='balanced'` and explicit F1 monitoring improve minority class optimization
+   - Expected impact: 2-4% F1 improvement over XGBoost baseline; faster training
 
-## Experimentation
+5. **Engineer behavioral features: recency, frequency, and engagement trends**
+   - Change: Create new columns in feature preprocessing: `days_since_last_activity`, `activity_frequency_per_month`, `usage_trend_3m` (slope of 3-month activity), `service_count` (number of active services); add target encoding for categorical features with cardinality >10
+   - Rationale: Behavioral patterns directly correlate with churn; target encoding captures categorical relationships relevant to F1 without overfitting
+   - Expected impact: 4-10% F1 improvement depending on data richness
 
-Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it simply as: `uv run train.py`.
+6. **Stack XGBoost + LightGBM + Random Forest with logistic regression meta-learner**
+   - Change: Implement `StackingClassifier` with base estimators=[XGBClassifier(...), LGBMClassifier(...), RandomForestClassifier(n_estimators=100, class_weight='balanced')], final_estimator=LogisticRegression(class_weight='balanced'), cv=StratifiedKFold(5)
+   - Rationale: Ensemble stacking leverages strengths of multiple algorithms; meta-learner learns optimal combination for F1 in churn prediction
+   - Expected impact: 2-5% F1 improvement over single best model; reduced variance
 
-**What you CAN do:**
-- Modify `train.py` — this is the only file you edit. Everything is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, model size, etc.
+7. **Calibrate probability predictions using isotonic regression on validation data**
+   - Change: Add `from sklearn.calibration import CalibratedClassifierCV` wrapping the trained model with `method='isotonic'` and `cv='prefit'` on validation fold; apply calibrated probabilities to final threshold tuning
+   - Rationale: Uncalibrated probabilities lead to suboptimal thresholds; calibration improves reliability of threshold selection for F1 optimization
+   - Expected impact: 1-3% F1 improvement; larger gains if probability outputs are poorly calibrated
 
-**What you CANNOT do:**
-- Modify `prepare.py`. It is read-only. It contains the fixed evaluation, data loading, tokenizer, and training constants (time budget, sequence length, etc).
-- Install new packages or add dependencies. You can only use what's already in `pyproject.toml`.
-- Modify the evaluation harness. The `evaluate_bpb` function in `prepare.py` is the ground truth metric.
-
-**The goal is simple: get the lowest val_bpb.** Since the time budget is fixed, you don't need to worry about training time — it's always 5 minutes. Everything is fair game: change the architecture, the optimizer, the hyperparameters, the batch size, the model size. The only constraint is that the code runs without crashing and finishes within the time budget.
-
-**VRAM** is a soft constraint. Some increase is acceptable for meaningful val_bpb gains, but it should not blow up dramatically.
-
-**Simplicity criterion**: All else being equal, simpler is better. A small improvement that adds ugly complexity is not worth it. Conversely, removing something and getting equal or better results is a great outcome — that's a simplification win. When evaluating whether to keep a change, weigh the complexity cost against the improvement magnitude. A 0.001 val_bpb improvement that adds 20 lines of hacky code? Probably not worth it. A 0.001 val_bpb improvement from deleting code? Definitely keep. An improvement of ~0 but much simpler code? Keep.
-
-**The first run**: Your very first run should always be to establish the baseline, so you will run the training script as is.
-
-## Output format
-
-Once the script finishes it prints a summary like this:
-
-```
----
-val_bpb:          0.997900
-training_seconds: 300.1
-total_seconds:    325.9
-peak_vram_mb:     45060.2
-mfu_percent:      39.80
-total_tokens_M:   499.6
-num_steps:        953
-num_params_M:     50.3
-depth:            8
-```
-
-Note that the script is configured to always stop after 5 minutes, so depending on the computing platform of this computer the numbers might look different. You can extract the key metric from the log file:
-
-```
-grep "^val_bpb:" run.log
-```
-
-## Logging results
-
-When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-separated — commas break in descriptions).
-
-The TSV has a header row and 5 columns:
-
-```
-commit	val_bpb	memory_gb	status	description
-```
-
-1. git commit hash (short, 7 chars)
-2. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes
-3. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
-4. status: `keep`, `discard`, or `crash`
-5. short text description of what this experiment tried
-
-Example:
-
-```
-commit	val_bpb	memory_gb	status	description
-a1b2c3d	0.997900	44.0	keep	baseline
-b2c3d4e	0.993200	44.2	keep	increase LR to 0.04
-c3d4e5f	1.005000	44.0	discard	switch to GeLU activation
-d4e5f6g	0.000000	0.0	crash	double model width (OOM)
-```
-
-## The experiment loop
-
-The experiment runs on a dedicated branch (e.g. `autoresearch/mar5` or `autoresearch/mar5-gpu0`).
-
-LOOP FOREVER:
-
-1. Look at the git state: the current branch/commit we're on
-2. Tune `train.py` with an experimental idea by directly hacking the code.
-3. git commit
-4. Run the experiment: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
-5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
-6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
-7. Record the results in the tsv
-8. If val_bpb improved (lower), you "advance" the branch, keeping the git commit
-9. If val_bpb is equal or worse, you git reset back to where you started
-
-The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. And you're advancing the branch so that you can iterate. If you feel like you're getting stuck in some way, you can rewind but you should probably do this very very sparingly (if ever).
-
-**Timeout**: Each experiment should take ~5 minutes total (+ a few seconds for startup and eval overhead). If a run exceeds 10 minutes, kill it and treat it as a failure (discard and revert).
-
-**Crashes**: If a run crashes (OOM, or a bug, or etc.), use your judgment: If it's something dumb and easy to fix (e.g. a typo, a missing import), fix it and re-run. If the idea itself is fundamentally broken, just skip it, log "crash" as the status in the tsv, and move on.
-
-**NEVER STOP**: Once the experiment loop has begun (after the initial setup), do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep, or gone from a computer and expects you to continue working *indefinitely* until you are manually stopped. You are autonomous. If you run out of ideas, think harder — read papers referenced in the code, re-read the in-scope files for new angles, try combining previous near-misses, try more radical architectural changes. The loop runs until the human interrupts you, period.
-
-As an example use case, a user might leave you running while they sleep. If each experiment takes you ~5 minutes then you can run approx 12/hour, for a total of about 100 over the duration of the average human sleep. The user then wakes up to experimental results, all completed by you while they slept!
+8

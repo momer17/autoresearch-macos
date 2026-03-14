@@ -4,5 +4,8 @@ The plan lists experiments to run in priority order. Each experiment must be:
 - A single, concrete change to build_model() in model.py
 - Independently testable — one change at a time
 - Ordered from highest expected impact to lowest
+- Tailored to the specific metric being optimised (e.g. for f1/roc_auc prioritise recall/precision balance; for rmse/mae prioritise error reduction; for accuracy prioritise overall correctness)
 
-Format the output as a numbered markdown list. Be specific: name exact algorithms, parameters, or techniques rather than vague directions like "try different models".
+Format the output as a numbered markdown list. Be specific: name exact algorithms, parameters, column names, or techniques rather than vague directions like "try different models".
+
+Where dataset size is provided, factor it into recommendations — avoid expensive search strategies on large datasets, and avoid complex models on very small ones.
