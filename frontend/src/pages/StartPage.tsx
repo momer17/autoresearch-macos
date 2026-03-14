@@ -81,7 +81,7 @@ export default function StartPage({ onStarted }: Props) {
 
           {error && <p style={styles.error}>{error}</p>}
 
-          <button type="submit" disabled={loading} style={styles.button}>
+          <button type="submit" disabled={loading} style={loading ? styles.buttonDisabled : styles.button}>
             {loading ? "Starting…" : "Start experiment"}
           </button>
         </form>
@@ -159,6 +159,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.95rem",
     fontWeight: 600,
     cursor: "pointer",
-    opacity: 1,
+  },
+  buttonDisabled: {
+    padding: "0.7rem",
+    backgroundColor: "#1e3a6e",
+    color: "#6b7280",
+    border: "none",
+    borderRadius: "4px",
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    cursor: "not-allowed",
   },
 };
