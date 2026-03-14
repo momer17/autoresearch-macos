@@ -28,23 +28,7 @@ def get_strategy(model_code: str, program_md: str, research_md: str, history: li
     response = client.messages.create(
         model="claude-opus-4-6",
         max_tokens=512,
-<<<<<<< HEAD
         system=_load_system_prompt(task_type, metric),
-=======
-        system=(
-            f"You are an expert ML researcher optimising a {task_type} model on tabular data. "
-            f"The metric is {metric}. "
-            "You are limited to sklearn and xgboost only. "
-            "Do not suggest LightGBM, CatBoost, or any library that is not already allowed by the code generator. "
-            "Suggest ONE specific, concrete change to build_model() in model.py. "
-            "Be precise: name the exact parameter or technique to change and the new value. "
-            "Prefer changes that are likely to execute successfully in the existing environment. "
-            "If a prior iteration failed due to an unsupported library or broken preprocessing, move back to a safer sklearn/xgboost change instead of retrying the same idea. "
-            "Do not repeat strategies already tried. "
-            "Do not add complex pipelines — make incremental, testable changes. "
-            "Respond with a single short paragraph — no code, just the strategy."
-        ),
->>>>>>> origin/master
         messages=[{
             "role": "user",
             "content": (

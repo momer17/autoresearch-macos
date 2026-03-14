@@ -11,14 +11,20 @@ RESULTS_DIR = REPO_ROOT / "results"
 
 # Global experiment state — api.py reads this directly
 state = {
-    "status": "idle",          # idle | setting_up | running_baseline | running | complete | error
+    "status": "idle",           # idle | setting_up | running_baseline | running | complete | error
     "experiment_id": None,
-    "baseline": None,          # baseline score (float)
-    "best_score": None,        # best score seen so far
+    "stage_label": "",          # human-readable label of what is happening right now
+    "baseline": None,           # baseline score (float)
+    "best_score": None,
     "current_iteration": 0,
     "total_iterations": 12,
-    "research_summary": "",
-    "iterations": [],          # list of iteration records
+    # Agent outputs — filled in progressively
+    "research_summary": "",     # markdown from research_agent
+    "program": "",              # markdown from program_generator
+    "baseline_code": "",        # Python from baseline_generator
+    "current_strategy": "",     # plain-English strategy from strategist (latest)
+    "current_code": "",         # Python from coder (latest)
+    "iterations": [],           # list of iteration records
     "error": None,
 }
 
@@ -49,11 +55,16 @@ def _run(config: dict):
 
     state.update({
         "status": "setting_up",
+        "stage_label": "",
         "baseline": None,
         "best_score": None,
         "current_iteration": 0,
         "total_iterations": total,
         "research_summary": "",
+        "program": "",
+        "baseline_code": "",
+        "current_strategy": "",
+        "current_code": "",
         "iterations": [],
         "error": None,
     })
@@ -65,20 +76,24 @@ def _run(config: dict):
         from agents.loop.strategist import get_strategy
         from agents.loop.coder import write_model
 
-        # --- Setup phase (once) ---
-        state["research_summary"] = "Running research..."
+        # --- Research agent ---
+        state["stage_label"] = "Research agent: scanning ML literature..."
         research = run_research(config, task)
+        state["research_summary"] = research
 
-        state["research_summary"] = "Generating program plan..."
+        # --- Program generator ---
+        state["stage_label"] = "Program generator: building experiment plan..."
         program = generate_program(config, research, task)
+        state["program"] = program
 
-        state["research_summary"] = "Generating baseline model..."
+        # --- Baseline generator ---
+        state["stage_label"] = "Baseline generator: writing initial model..."
         baseline_code = generate_baseline(config, task)
-
-        state["research_summary"] = research[:600] if research else "Research complete."
+        state["baseline_code"] = baseline_code
 
         # --- Baseline evaluation ---
         state["status"] = "running_baseline"
+        state["stage_label"] = "Evaluating baseline model..."
         baseline_result = run_evaluation(baseline_code, config)
 
         if not baseline_result["success"]:
@@ -98,9 +113,17 @@ def _run(config: dict):
             state["status"] = "running"
             state["current_iteration"] = i + 1
 
+            state["stage_label"] = f"Strategist: choosing strategy for iteration {i + 1}..."
+            state["current_strategy"] = ""
+            state["current_code"] = ""
             strategy = get_strategy(best_code, program, research, history, config)
-            new_code = write_model(strategy, best_code, config)
+            state["current_strategy"] = strategy
 
+            state["stage_label"] = f"Coder: implementing iteration {i + 1}..."
+            new_code = write_model(strategy, best_code, config)
+            state["current_code"] = new_code
+
+            state["stage_label"] = f"Evaluating iteration {i + 1}..."
             result = run_evaluation(new_code, config)
 
             if result["success"] and result["score"] is not None:
@@ -134,6 +157,7 @@ def _run(config: dict):
             _write_result(experiment_id, record)
 
         state["status"] = "complete"
+        state["stage_label"] = "Experiment complete."
 
     except Exception:
         state["status"] = "error"

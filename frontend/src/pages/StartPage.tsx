@@ -6,55 +6,37 @@ interface Props {
   onStarted: (meta: ExperimentMeta) => void;
 }
 
-interface Message {
-  role: "bot" | "user";
-  text: string;
-}
-
-type Stage = "drop_csv" | "pick_target" | "describe_goal" | "starting";
-
 function parseColumns(csvText: string): string[] {
   const firstLine = csvText.split("\n")[0];
   return firstLine.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
 }
 
 export default function StartPage({ onStarted }: Props) {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "bot", text: "Welcome! Upload your CSV dataset using the panel on the right, then we'll set up your experiment." },
-  ]);
-  const [stage, setStage] = useState<Stage>("drop_csv");
-  const [columns, setColumns] = useState<string[]>([]);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [columns, setColumns] = useState<string[]>([]);
   const [target, setTarget] = useState("");
-  const [input, setInput] = useState("");
+  const [description, setDescription] = useState("");
   const [dragging, setDragging] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  function push(role: "bot" | "user", text: string) {
-    setMessages((prev) => [...prev, { role, text }]);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-  }
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File) {
     if (!file.name.endsWith(".csv")) {
-      push("bot", "That doesn't look like a CSV file. Please upload a .csv file.");
+      setError("Please upload a .csv file.");
       return;
     }
     const text = await file.text();
     const cols = parseColumns(text);
     if (cols.length === 0) {
-      push("bot", "Could not read columns. Make sure the first row is a header.");
+      setError("Could not read column headers from the first row.");
       return;
     }
     setCsvFile(file);
     setColumns(cols);
-    push("user", "\u{1F4CE} " + file.name);
-    push(
-      "bot",
-      "Found " + cols.length + " columns:\n" + cols.join(", ") + "\n\nWhich column do you want to predict?"
-    );
-    setStage("pick_target");
+    setTarget("");
+    setError("");
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -64,151 +46,64 @@ export default function StartPage({ onStarted }: Props) {
     if (file) handleFile(file);
   }
 
-  function selectTarget(col: string) {
-    setTarget(col);
-    push("user", col);
-    push("bot", `Got it — predicting "${col}".\n\nDescribe the task in one sentence (e.g. "Detect fraudulent transactions").`);
-    setStage("describe_goal");
-    setInput("");
-  }
-
-  function handleSend() {
-    const text = input.trim();
-    if (!text) return;
-    setInput("");
-
-    if (stage === "drop_csv") {
-      push("user", text);
-      push("bot", "Upload your CSV dataset using the panel on the right to get started.");
-      return;
-    }
-
-    if (stage === "pick_target") {
-      const matched = columns.find((c) => c.toLowerCase() === text.toLowerCase()) ?? text;
-      selectTarget(matched);
-      return;
-    }
-
-    if (stage === "describe_goal") {
-      push("user", text);
-      startExperiment(text);
-    }
-  }
-
-  async function startExperiment(goal: string) {
-    if (!csvFile) return;
-    setStage("starting");
-    push("bot", "Starting the experiment...");
+  async function handleStart() {
+    if (!csvFile || !target || !description.trim()) return;
+    setLoading(true);
+    setError("");
     try {
       const res = await postStart({
         file: csvFile,
         target_col: target,
-        task_description: goal,
+        task_description: description.trim(),
         total_iterations: 8,
       });
       onStarted({ metric: res.metric, task_type: res.task_type });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      push("bot", "Failed to start: " + msg + "\n\nDrop your CSV again to retry.");
-      setCsvFile(null);
-      setColumns([]);
-      setStage("drop_csv");
+      setError(err instanceof Error ? err.message : "Failed to start experiment.");
+      setLoading(false);
     }
   }
 
+  const canStart = !!csvFile && !!target && description.trim().length > 0 && !loading;
+
   return (
     <div style={s.page}>
-      {/* Left: chat column */}
-      <div style={s.chatCol}>
-        <div style={s.chatArea}>
-          {messages.map((m, i) => (
-            <div key={i} style={m.role === "bot" ? s.botRow : s.userRow}>
-              <div style={m.role === "bot" ? s.botBubble : s.userBubble}>
-                {m.text.split("\n").map((line, j, arr) => (
-                  <span key={j}>
-                    {line}
-                    {j < arr.length - 1 && <br />}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
+      <div style={s.card}>
+        <div style={s.logo}>autoresearch</div>
+        <p style={s.sub}>Autonomous ML optimisation — upload your dataset to begin.</p>
 
-          {stage === "pick_target" && columns.length > 0 && (
-            <div style={s.chipsRow}>
-              {columns.map((col) => (
-                <button key={col} style={s.chip} onClick={() => selectTarget(col)}>
-                  {col}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div ref={bottomRef} />
-        </div>
-
-        {stage !== "starting" && (
-          <div style={s.inputRow}>
-            <input
-              style={s.textInput}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={
-                stage === "drop_csv"
-                  ? "Type a message..."
-                  : stage === "pick_target"
-                  ? "Type or click a column above..."
-                  : "Describe the task..."
-              }
-              autoFocus
-            />
-            <button style={s.sendBtn} onClick={handleSend}>
-              Send
-            </button>
-          </div>
-        )}
-
-        {stage === "starting" && (
-          <div style={s.startingBar}>Setting up experiment...</div>
-        )}
-      </div>
-
-      {/* Right: CSV sidebar */}
-      <div style={s.csvSidebar}>
-        <div style={s.sidebarTitle}>Dataset</div>
-
-        {csvFile ? (
-          <div style={s.fileLoaded}>
-            <span style={s.fileIcon}>📄</span>
-            <span style={s.fileName}>{csvFile.name}</span>
-            <span style={s.fileInfo}>{columns.length} columns</span>
-            {stage !== "starting" && (
-              <button
-                style={s.changeBtn}
-                onClick={() => {
-                  setCsvFile(null);
-                  setColumns([]);
-                  setStage("drop_csv");
-                  push("bot", "CSV removed. Drop a new file to start over.");
-                }}
-              >
-                Change file
-              </button>
-            )}
-          </div>
-        ) : (
+        {/* CSV drop zone */}
+        <div style={s.section}>
+          <label style={s.label}>Dataset (CSV)</label>
           <div
-            style={{ ...s.dropZone, ...(dragging ? s.dropZoneActive : {}) }}
+            style={{ ...s.dropZone, ...(dragging ? s.dropActive : {}), ...(csvFile ? s.dropDone : {}) }}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
           >
-            <span style={s.dropIcon}>⬆</span>
-            <span style={s.dropText}>
-              {dragging ? "Release to upload" : "Drop CSV here\nor click to browse"}
-            </span>
+            {csvFile ? (
+              <div style={s.fileInfo}>
+                <span style={s.fileIcon}>📄</span>
+                <div>
+                  <div style={s.fileName}>{csvFile.name}</div>
+                  <div style={s.fileMeta}>{columns.length} columns detected</div>
+                </div>
+                <button
+                  style={s.changeBtn}
+                  onClick={(e) => { e.stopPropagation(); setCsvFile(null); setColumns([]); setTarget(""); }}
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <>
+                <span style={s.dropIcon}>⬆</span>
+                <span style={s.dropText}>
+                  {dragging ? "Release to upload" : "Drop CSV here or click to browse"}
+                </span>
+              </>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -217,7 +112,43 @@ export default function StartPage({ onStarted }: Props) {
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
             />
           </div>
+        </div>
+
+        {/* Target column chips */}
+        {columns.length > 0 && (
+          <div style={s.section}>
+            <label style={s.label}>Target column — what do you want to predict?</label>
+            <div style={s.chips}>
+              {columns.map((col) => (
+                <button
+                  key={col}
+                  style={{ ...s.chip, ...(target === col ? s.chipActive : {}) }}
+                  onClick={() => setTarget(col)}
+                >
+                  {col}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
+
+        {/* Task description */}
+        <div style={s.section}>
+          <label style={s.label}>Task description</label>
+          <textarea
+            style={s.textarea}
+            rows={3}
+            placeholder='e.g. "Predict whether a customer will churn based on their usage history."'
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+
+        {error && <p style={s.error}>{error}</p>}
+
+        <button style={{ ...s.startBtn, ...(!canStart ? s.startBtnDisabled : {}) }} onClick={handleStart} disabled={!canStart}>
+          {loading ? "Starting…" : "Start Experiment"}
+        </button>
       </div>
     </div>
   );
@@ -225,164 +156,137 @@ export default function StartPage({ onStarted }: Props) {
 
 const s: Record<string, React.CSSProperties> = {
   page: {
-    display: "flex",
-    flexDirection: "row",
-    height: "100vh",
+    minHeight: "100vh",
     backgroundColor: "#0f0f0f",
-    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "2rem 1rem",
   },
-  chatCol: {
-    flex: 1,
+  card: {
+    width: "100%",
+    maxWidth: "560px",
     display: "flex",
     flexDirection: "column",
-    minWidth: 0,
-    borderRight: "1px solid #1e1e1e",
+    gap: "1.5rem",
   },
-  chatArea: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "1.5rem 1rem",
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.75rem",
-    maxWidth: "720px",
-    width: "100%",
-    margin: "0 auto",
-    boxSizing: "border-box",
-  },
-  botRow: { display: "flex", justifyContent: "flex-start" },
-  userRow: { display: "flex", justifyContent: "flex-end" },
-  botBubble: {
-    backgroundColor: "#1e1e1e",
-    border: "1px solid #2a2a2a",
-    borderRadius: "12px 12px 12px 2px",
-    padding: "0.65rem 1rem",
-    maxWidth: "80%",
-    fontSize: "0.9rem",
-    lineHeight: "1.5",
-    color: "#e5e5e5",
-  },
-  userBubble: {
-    backgroundColor: "#2563eb",
-    borderRadius: "12px 12px 2px 12px",
-    padding: "0.65rem 1rem",
-    maxWidth: "80%",
-    fontSize: "0.9rem",
-    lineHeight: "1.5",
+  logo: {
+    fontSize: "1.5rem",
+    fontWeight: 700,
     color: "#fff",
+    letterSpacing: "-0.02em",
   },
-  chipsRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "0.5rem",
-    paddingLeft: "0.25rem",
-  },
-  chip: {
-    backgroundColor: "#1a1a1a",
-    border: "1px solid #333",
-    borderRadius: "999px",
-    padding: "0.3rem 0.75rem",
-    color: "#ccc",
-    fontSize: "0.8rem",
-    cursor: "pointer",
-  },
-  inputRow: {
-    display: "flex",
-    gap: "0.5rem",
-    padding: "0.75rem 1rem",
-    borderTop: "1px solid #1e1e1e",
-    maxWidth: "720px",
-    width: "100%",
-    margin: "0 auto",
-    boxSizing: "border-box",
-  },
-  textInput: {
-    flex: 1,
-    backgroundColor: "#1a1a1a",
-    border: "1px solid #2a2a2a",
-    borderRadius: "6px",
-    padding: "0.65rem 0.9rem",
-    color: "#fff",
+  sub: {
+    margin: 0,
     fontSize: "0.9rem",
-    outline: "none",
-  },
-  sendBtn: {
-    backgroundColor: "#2563eb",
-    color: "#fff",
-    border: "none",
-    borderRadius: "6px",
-    padding: "0.65rem 1.25rem",
-    fontSize: "0.9rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  startingBar: {
-    textAlign: "center",
-    padding: "1rem",
     color: "#555",
-    fontSize: "0.875rem",
-    borderTop: "1px solid #1e1e1e",
+    lineHeight: "1.5",
   },
-  // CSV sidebar
-  csvSidebar: {
-    width: "220px",
-    flexShrink: 0,
+  section: {
     display: "flex",
     flexDirection: "column",
-    gap: "0.75rem",
-    padding: "1.5rem 1rem",
-    backgroundColor: "#0a0a0a",
+    gap: "0.5rem",
   },
-  sidebarTitle: {
+  label: {
     fontSize: "0.75rem",
     fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    color: "#555",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
+    color: "#666",
   },
   dropZone: {
     border: "2px dashed #2a2a2a",
-    borderRadius: "8px",
-    padding: "1.5rem 0.75rem",
+    borderRadius: "10px",
+    padding: "1.5rem",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     gap: "0.5rem",
     cursor: "pointer",
     transition: "border-color 0.15s, background-color 0.15s",
-    textAlign: "center",
+    textAlign: "center" as const,
   },
-  dropZoneActive: {
+  dropActive: {
     borderColor: "#2563eb",
     backgroundColor: "#0d1a33",
   },
+  dropDone: {
+    borderColor: "#2a2a2a",
+    backgroundColor: "#111",
+    alignItems: "flex-start",
+  },
   dropIcon: { fontSize: "1.5rem", color: "#444" },
-  dropText: { fontSize: "0.8rem", color: "#555", lineHeight: "1.4" },
-  fileLoaded: {
+  dropText: { fontSize: "0.875rem", color: "#555" },
+  fileInfo: {
     display: "flex",
-    flexDirection: "column",
-    gap: "0.4rem",
-    padding: "0.75rem",
-    backgroundColor: "#1a1a1a",
-    border: "1px solid #2a2a2a",
-    borderRadius: "8px",
+    alignItems: "center",
+    gap: "0.75rem",
+    width: "100%",
   },
-  fileIcon: { fontSize: "1.25rem" },
-  fileName: {
-    fontSize: "0.8rem",
-    color: "#e5e5e5",
-    wordBreak: "break-all",
-    fontWeight: 500,
-  },
-  fileInfo: { fontSize: "0.75rem", color: "#666" },
+  fileIcon: { fontSize: "1.5rem" },
+  fileName: { fontSize: "0.9rem", color: "#e5e5e5", fontWeight: 500 },
+  fileMeta: { fontSize: "0.75rem", color: "#555" },
   changeBtn: {
-    marginTop: "0.25rem",
+    marginLeft: "auto",
     backgroundColor: "transparent",
     border: "1px solid #333",
     borderRadius: "4px",
-    padding: "0.3rem 0.5rem",
+    padding: "0.25rem 0.6rem",
     color: "#888",
     fontSize: "0.75rem",
     cursor: "pointer",
+  },
+  chips: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "0.4rem",
+  },
+  chip: {
+    backgroundColor: "#1a1a1a",
+    border: "1px solid #2a2a2a",
+    borderRadius: "999px",
+    padding: "0.3rem 0.8rem",
+    color: "#aaa",
+    fontSize: "0.8rem",
+    cursor: "pointer",
+    transition: "border-color 0.1s, color 0.1s",
+  },
+  chipActive: {
+    borderColor: "#2563eb",
+    color: "#fff",
+    backgroundColor: "#0d1a33",
+  },
+  textarea: {
+    backgroundColor: "#111",
+    border: "1px solid #2a2a2a",
+    borderRadius: "8px",
+    padding: "0.75rem 0.9rem",
+    color: "#e5e5e5",
+    fontSize: "0.9rem",
+    lineHeight: "1.5",
+    outline: "none",
+    resize: "vertical" as const,
+    fontFamily: "inherit",
+  },
+  error: {
+    margin: 0,
+    fontSize: "0.85rem",
+    color: "#ef4444",
+  },
+  startBtn: {
+    backgroundColor: "#2563eb",
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
+    padding: "0.85rem",
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    width: "100%",
+  },
+  startBtnDisabled: {
+    backgroundColor: "#1a2a4a",
+    color: "#445",
+    cursor: "not-allowed",
   },
 };

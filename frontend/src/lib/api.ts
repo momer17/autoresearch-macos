@@ -14,11 +14,17 @@ export interface Iteration {
 export interface StatusResponse {
   status: "idle" | "setting_up" | "running_baseline" | "running" | "complete" | "error";
   experiment_id: string | null;
+  stage_label: string;
   baseline: number | null;
   best_score: number | null;
   current_iteration: number;
   total_iterations: number;
+  // Agent outputs
   research_summary: string;
+  program: string;
+  baseline_code: string;
+  current_strategy: string;
+  current_code: string;
   iterations: Iteration[];
   error: string | null;
 }
