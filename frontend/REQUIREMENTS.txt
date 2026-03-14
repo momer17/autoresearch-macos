@@ -15,7 +15,11 @@ COMPLETED
 
 [x] src/pages/StartPage.tsx
       - File upload input (CSV)
+<<<<<<< Updated upstream
       - target_col, task_description, metric, task_type, feature_cols, total_iterations
+=======
+      - target_col, task_description, total_iterations
+>>>>>>> Stashed changes
       - Sends FormData to POST /start
       - Loading + error states, disabled button styling
 
@@ -48,6 +52,10 @@ TODO — Dashboard (next)
       Improvement delta (formatted to 4 decimal places)
       Note: metric direction varies — higher is better for f1/accuracy/roc_auc/r2,
             lower is better for rmse/mae. Display accordingly.
+<<<<<<< Updated upstream
+=======
+      Show the metric name (e.g. "Optimising for: roc_auc") — store from /start response
+>>>>>>> Stashed changes
 
 [ ] Progress bar
       current_iteration / total_iterations
@@ -76,11 +84,25 @@ POST /start — multipart/form-data
   file             File      required — CSV upload
   target_col       string    required
   task_description string    required
+<<<<<<< Updated upstream
   metric           string    required  (f1 | accuracy | roc_auc | rmse | mae | r2)
   task_type        string    required  (binary_classification | multiclass_classification | regression)
   feature_cols     string    optional  comma-separated, empty = all except target
   total_iterations number    optional  default 8
 
+=======
+  total_iterations number    optional  default 8
+
+  *** DO NOT send metric, task_type, or feature_cols — backend auto-infers all three ***
+
+POST /start — response JSON
+  experiment_id    string
+  status           "started"
+  task_type        string    (binary_classification | multiclass_classification | regression)
+  metric           string    (roc_auc | f1_macro | rmse | ...)
+  *** Store task_type and metric from this response on the client — they are NOT in /status ***
+
+>>>>>>> Stashed changes
 GET /status — JSON
   status           "idle" | "setting_up" | "running_baseline" | "running" | "complete" | "error"
   experiment_id    string | null
@@ -94,6 +116,10 @@ GET /status — JSON
 
 Iteration {
   iteration   number
+<<<<<<< Updated upstream
+=======
+  iteration   number
+>>>>>>> Stashed changes
   score       number | null   (null = crashed run)
   best_score  number
   strategy    string
@@ -126,3 +152,7 @@ KEY RULES
 4. Metric direction: higher is better for f1/accuracy/roc_auc/r2 — lower for rmse/mae.
 5. score in iterations can be null — always null-check before displaying.
 6. No UI libraries needed.
+<<<<<<< Updated upstream
+=======
+7. metric and task_type come from the /start response, NOT from /status — store them in component state.
+>>>>>>> Stashed changes
