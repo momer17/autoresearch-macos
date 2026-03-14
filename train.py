@@ -17,15 +17,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-def verify_macos_env():
-    if sys.platform != "darwin":
-        raise RuntimeError(f"This script requires macOS with Metal. Detected platform: {sys.platform}")
-    if not torch.backends.mps.is_available():
-        raise RuntimeError("MPS (Metal Performance Shaders) is not available. Ensure you are running on Apple Silicon with a compatible PyTorch build.")
-    print("Environment verified: macOS detected with Metal (MPS) hardware acceleration available.")
-    print()
-
-verify_macos_env()
 
 from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, make_dataloader, evaluate_bpb
 
