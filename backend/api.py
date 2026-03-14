@@ -2,6 +2,7 @@ import shutil
 import uuid
 from pathlib import Path
 
+import pandas as pd
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -20,6 +21,17 @@ app.add_middleware(
 )
 
 
+def _infer_task_and_metric(y) -> tuple[str, str]:
+    """Infer task_type and best default metric from the target column."""
+    n_unique = y.nunique()
+    if n_unique == 2:
+        return "binary_classification", "roc_auc"
+    elif n_unique <= 20:
+        return "multiclass_classification", "f1_macro"
+    else:
+        return "regression", "rmse"
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -30,9 +42,6 @@ async def start(
     file: UploadFile = File(...),
     target_col: str = Form(...),
     task_description: str = Form(...),
-    metric: str = Form(...),
-    task_type: str = Form("binary_classification"),
-    feature_cols: str = Form(""),       # comma-separated, empty = all except target
     total_iterations: int = Form(8),
 ):
     if state.get("status") in ("running", "setting_up", "running_baseline"):
@@ -45,14 +54,16 @@ async def start(
     with csv_path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    # Parse feature_cols
-    cols = [c.strip() for c in feature_cols.split(",") if c.strip()] if feature_cols else None
+    # Infer task type and metric from the data
+    df = pd.read_csv(csv_path)
+    feature_cols = [c for c in df.columns if c != target_col]
+    task_type, metric = _infer_task_and_metric(df[target_col])
 
     config = {
         "experiment_id": experiment_id,
         "csv_path": str(csv_path),
         "target_col": target_col,
-        "feature_cols": cols,
+        "feature_cols": feature_cols,
         "metric": metric,
         "task_type": task_type,
         "task_description": task_description,
@@ -60,7 +71,12 @@ async def start(
     }
 
     start_experiment(config)
-    return {"experiment_id": experiment_id, "status": "started"}
+    return {
+        "experiment_id": experiment_id,
+        "status": "started",
+        "task_type": task_type,
+        "metric": metric,
+    }
 
 
 @app.get("/status")
